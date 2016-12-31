@@ -1,0 +1,36 @@
+
+== Code ==
+Code is a bit of a mess. 
+
+
+print_image_sizes.py
+	Simple script to extract the sizes of all source training images
+
+create_targets.py
+	For each training view, create corresponding masks of the 10 classes as pngs
+	filename = {iid}_C{class_type}.png
+	These masks are the same size as the '3' type images.
+	Also create pretty colored composite of all 10 classes, "{iid}_C0.png"
+
+
+dstl_utils.py
+	Various utility routines and data for manipulating the dstl dataset. 
+
+
+
+== Notes ==
+
+TensorFlow dimension ordering convention is "Width-Height-Depth"
+image_dim_ordering='tf'
+
+
+
+width, height, in_depth, layer_depth, out_depth, layers, scales, dropout, 
+
+
+== Setup ==
+
+
+sudo pip install pandas
+sudo pip install shapely[vectorized]==1.6b2
+sudo pip install matplotlib

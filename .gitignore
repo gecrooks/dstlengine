@@ -1,0 +1,18 @@
+# MacOS generated file
+.DS_Store
+
+__pycache__
+
+# Don't import large binary files into GIT
+three_band/
+sixteen_band/
+input/
+
+*.png
+*.tif
+*.npy
+*.hdf5	
+*.gz
+*.jpg
+
+junk/
