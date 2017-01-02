@@ -1,10 +1,39 @@
 
+== Things need doing ==
+
+* Convert masks to polygons
+ rasterio.features.shapes() or opencv
+ There is some example code from 'shawn' on the forum, but I couldnt get it to work correctly.
+ 
+ To test, roundtrip on the target data. Create a mask, extrt the multipolygons, recreate the mask,
+ and see how different they are.
+
+
+
+* Image alignment
+Some bands of some images are clearly out of alighnemtn with each other. See forum for examples.
+Need to automatically realign somehow. 
+Tutorial how to do 'image registration' with OpenCV
+https://www.learnopencv.com/tag/image-registration/
+
+
+* code for train ids, test ids, overlap ids
+test ids in submit order. 
+
+
+* Glue 5x5 sets together
+May need some normalization between images?
+
+
 == Code ==
 Code is a bit of a mess. 
 
 
-print_image_sizes.py
-	Simple script to extract the sizes of all source training images
+dstl_utils.py
+	Various utility routines and data for manipulating the dstl dataset. 
+
+create_data.py
+	create the training data
 
 create_targets.py
 	For each training view, create corresponding masks of the 10 classes as pngs
@@ -12,16 +41,37 @@ create_targets.py
 	These masks are the same size as the '3' type images.
 	Also create pretty colored composite of all 10 classes, "{iid}_C0.png"
 
+generate.py		
+	Generate training and validation batches
+	
+think.py
+	First simple convnet predictor
 
-dstl_utils.py
-	Various utility routines and data for manipulating the dstl dataset. 
 
+
+create_images.py	
+composite.py
+create_object_images.py	
+create_target_images.py	
+	Various code chunks for creating images from the data.
+	(Maybe some of these are dead code now?)
+
+print_image_sizes.py
+	Simple script to extract and print the sizes of all source training images
+
+print_sizes.py
+	Print sizes of all type '3' images.
 
 
 == Notes ==
 
 TensorFlow dimension ordering convention is "Width-Height-Depth"
 image_dim_ordering='tf'
+
+Theanos ordering is Depth-Width-Height (??) 
+
+
+
 
 
 
@@ -34,3 +84,28 @@ width, height, in_depth, layer_depth, out_depth, layers, scales, dropout,
 sudo pip install pandas
 sudo pip install shapely[vectorized]==1.6b2
 sudo pip install matplotlib
+
+
+== Other notes ==
+The polygon coordinates are on a lattice. Distance between points is 10^-6. 
+Since 0.01 units = about 1km, lattice points are 10cm apparent
+Highest resolution data is about 30cm. 
+
+Images are organized in sets of 5x5 
+
+Some images sets repeated. Possibly just different times of year. 
+6110~6140, 6020~6130, 6030~6150
+
+
+submission file needs to be in the exact same order of ImageId, ClassType as the sample_submission.csv
+
+Submission is 4290 rows
+There are 450 images (in 9 5x5 blocks) x 10 classes
+Originally 21 imagas in training set (leaving 429 in test set)
+But 4 moved to training set (25 total)
+25 images in training set. But 4 where moved from test to train.
+For those 4 should report MULTIPOLYGON EMPTY
+
+
+
+

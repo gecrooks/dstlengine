@@ -17,65 +17,6 @@ import os
 
 for iid in load_train_iids():
     progress(iid+' ')
-import random, os
-from dstl_utils import load_train_iids, output_dir
-import numpy as np
-
-
-iids = load_train_iids()
-
-random.shuffle(iids)
-
-train_data = []
-validation_data = []
-batchsize = 32
-
-validation_fraction = 0.2
-chunksize = 243 # 3^5
-
-data_dict = {}
-
-data_lost = []
-
-train_coords = []
-val_coords = []
-
-for iid in iids :
-    filepath = os.path.join(output_dir, "{}.npy".format(iid) )
-    data = np.load(filepath, mmap_mode='r')
-    data_dict[iid] = data
-    C, X, Y = data.shape
-    coords = []
-    for x in range(random.randint(0, chunksize-1), X,chunksize) :
-        for y in range(random.randint(0, chunksize-1), Y, chunksize) :
-            coords.append( (iid, x,y) )              
-
-    random.shuffle(coords)
-    vn = int(len(coords) * validation_fraction)
-    val_coords.extend(coords[0:vn])
-    train_coords.extend(coords[vn:])
-
-
-print( len(train_coords), len(val_coords))
-#
-
-
-for coord in coords :
-    iid, x,y = coord
-    chunk = data_dict[iid][:, x:x+chunksize, y:y+chunksize]
-    print( iid, x,y, chunk.max() )
-
-    #print(iid,x,y, data[:, x:x+chunksize, y:y+chunksize].max() )
-     
-    
-    
-print(validation_data)
-
-
-
-
-
-
 
     data = []
         
