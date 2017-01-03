@@ -1,0 +1,105 @@
+
+== Things need doing ==
+
+* Convert masks to polygons
+ rasterio.features.shapes() or opencv
+ There is some example code from 'shawn' on the forum, but I couldnt get it to work correctly.
+ 
+ To test, roundtrip on the target data. Create a mask, extrt the multipolygons, recreate the mask,
+ and see how different they are.
+
+
+
+* Image alignment
+Some bands of some images are clearly out of alighnemtn with each other. See forum for examples.
+Need to automatically realign somehow. 
+Tutorial how to do 'image registration' with OpenCV
+https://www.learnopencv.com/tag/image-registration/
+
+
+* code for train ids, test ids, overlap ids
+test ids in submit order. 
+
+
+* Glue 5x5 sets together
+May need some normalization between images?
+
+
+== Code ==
+
+core_dstl.py
+	Various library routines for manipulating dstl data
+
+test_core_dstl.py
+	Simple test script
+
+print_info.py
+	Extract various useful bits of information about the images
+	(move into visualize data?)
+
+visualize_data.py
+	Creates various images from the data
+	(Only training data at present. Should also visualize test data.)
+	
+create_data.py
+	Munges the training data into a form suitable for machine learning
+	(Again, should also analyze test data)
+
+create_targets.py
+	Munges training data into targets suitable for machine learning
+	
+
+
+
+
+
+== Notes ==
+
+TensorFlow dimension ordering convention is "Width-Height-Depth"
+image_dim_ordering='tf'
+
+Theanos ordering is Depth-Width-Height (??) 
+
+
+
+
+
+
+width, height, in_depth, layer_depth, out_depth, layers, scales, dropout, 
+
+
+== Setup ==
+
+
+
+== Other notes ==
+The polygon coordinates are on a lattice. Distance between points is 10^-6. 
+Since 0.01 units = about 1km, lattice points are 10cm apparent
+Highest resolution data is about 30cm. 
+
+Images are organized in sets of 5x5 
+
+Some images sets repeated. Possibly just different times of year. 
+6110~6140, 6020~6130, 6030~6150
+
+
+submission file needs to be in the exact same order of ImageId, ClassType as the sample_submission.csv
+
+Submission is 4290 rows
+There are 450 images (in 9 5x5 blocks) x 10 classes
+Originally 21 imagas in training set (leaving 429 in test set)
+But 4 moved to training set (25 total)
+25 images in training set. But 4 where moved from test to train.
+For those 4 should report MULTIPOLYGON EMPTY
+
+
+# ids consist of 
+# iid_type_channel
+# iid := region_x_y type channel    (image id)
+# region is 4 characeter, e.g. '6020'
+# x and y are location with a region 5x5 grid
+# type is the image type, '3','P', 'M', 'A'
+# or 'C' for class masks
+# channel is the integer channel number
+
+
