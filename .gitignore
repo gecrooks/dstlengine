@@ -14,5 +14,8 @@ input/
 *.hdf5	
 *.gz
 *.jpg
+*.pyc
+*.swp
+nohup.out
 
 junk/
