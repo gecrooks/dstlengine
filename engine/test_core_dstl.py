@@ -49,7 +49,7 @@ progress()
 
 # Test load_image_sizes
 width, height = image_size('6010_1_2')
-assertAlmostEqual( - xmax/ymin, width/height, acc=4)
+assertAlmostEqual( - xmax/ymin, 1.* width/height, acc=4)
 progress()
 
 
