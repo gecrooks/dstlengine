@@ -103,9 +103,22 @@ assert( imageId_to_classId('6020_1_2','P', None) == '6020_1_2_P')
 assert( imageId_to_classId('6020_1_2',None, None) == '6020_1_2' )
 progress()
 
+
 # Test filename
 fn =filename('6020_1_2','P','10', 'extra', '.quack')
 assert(fn== '../output/6020_1_2_P_10_extra.quack')
+progress()
+
+
+
+
+# Test class_polygons_to_composite
+iid= '6010_1_2'
+class_polygons = wkt_polygons[iid]
+fn = filename(iid, extra = 'test_composite')
+class_polygons_to_composite(class_polygons, xmax, ymin, width, height, fn, outline=False)
+fn = filename(iid, extra = 'test_outline')
+class_polygons_to_composite(class_polygons, xmax, ymin, width, height, fn, outline=True)
 progress()
 
 
@@ -117,13 +130,24 @@ width, height = image_size('6010_1_2')
 polygons_to_mask(polygons, xmax, ymin, width, height, filename=None)
 progress()
 
-# Test class_polygons_to_composite
-iid= '6010_1_2'
-class_polygons = wkt_polygons[iid]
-fn = filename(iid, extra = 'test_composite')
-class_polygons_to_composite(class_polygons, xmax, ymin, width, height, fn, outline=False)
-fn = filename(iid, extra = 'test_outline')
-class_polygons_to_composite(class_polygons, xmax, ymin, width, height, fn, outline=True)
+
+# Test mask_to_polygons
+actual_polygons = wkt_polygons['6010_1_2'][4]
+assert(len(actual_polygons) == 12)
+xmax, ymin = grid_sizes['6010_1_2']
+width, height = image_size('6010_1_2')
+mask = polygons_to_mask(actual_polygons, xmax, ymin, width, height)
+predicted_polygons = mask_to_polygons(mask, xmax, ymin)
+new_mask = polygons_to_mask(actual_polygons, xmax, ymin, width, height)
+progress()
+
+
+# Test polygon_jaccard
+jaccard, tp, fp, fn = polygon_jaccard(actual_polygons, predicted_polygons)
+assert(jaccard>0.9)
+#print(jaccard, tp, fp, fn)
+progress()
+
 
 
 progress('Done')

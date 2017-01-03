@@ -7,7 +7,16 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import pandas
+
+import shapely
 from shapely import wkt
+import shapely.geometry
+import shapely.affinity
+
+import rasterio
+import rasterio.features
+
+
 from descartes.patch import PolygonPatch
 import tifffile as tiff
 from PIL import Image
@@ -131,7 +140,7 @@ training_data_filename =  "train_wkt_v4.csv"
 grid_sizes_filename = "grid_sizes.csv"
 
 
-grid_resolution = 1/1000000 
+grid_resolution = 1./1000000 
 
 # default dots per inch when creating images.
 dpi = 512   
@@ -280,32 +289,6 @@ def filename(imageId, imageType=None, channelId=None, extra=None, ext='.png'):
     
     
 
-def polygons_to_mask(multipolygon, xmax, ymin, width, height, filename=None) :
-    width /= dpi
-    height /= dpi    
-    fig = plt.figure(figsize=(width,height), frameon=False)
-    axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
-    axes.set_axis_off()         
-    fig.add_axes(axes)  
-    for polygon in multipolygon:
-        patch = PolygonPatch(polygon,
-                            color='#000000',
-                            lw=0,               # linewidth
-                            antialiased = True)
-        axes.add_patch(patch)
-    axes.set_xlim(0, xmax)
-    axes.set_ylim(ymin, 0)
-    axes.set_aspect(1)
-    plt.axis('off')
-    
-    if filename is None :
-        filename = tempfile.NamedTemporaryFile(suffix='.png')
-    plt.savefig(filename, pad_inches=0, dpi=dpi, transparent=False)
-    plt.clf()
-    plt.close()
-    a = np.asarray(Image.open(filename))
-    a = (1.- a[:,:,0]/255.)  # convert from B&W to zeros and ones.
-    return a    
 
     
 
@@ -348,5 +331,85 @@ def class_polygons_to_composite(class_polygons, xmax, ymin, width, height, filen
     plt.close()    
 
 
+def polygons_to_mask(multipolygon, xmax, ymin, width, height, filename=None) :
+    width /= dpi
+    height /= dpi    
+    fig = plt.figure(figsize=(width,height), frameon=False)
+    axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
+    axes.set_axis_off()         
+    fig.add_axes(axes)  
+    for polygon in multipolygon:
+        patch = PolygonPatch(polygon,
+                            color='#000000',
+                            lw=0,               # linewidth
+                            antialiased = True)
+        axes.add_patch(patch)
+    axes.set_xlim(0, xmax)
+    axes.set_ylim(ymin, 0)
+    axes.set_aspect(1)
+    plt.axis('off')
+    
+    if filename is None :
+        filename = tempfile.NamedTemporaryFile(suffix='.png')
+    plt.savefig(filename, pad_inches=0, dpi=dpi, transparent=False)
+    plt.clf()
+    plt.close()
+    a = np.asarray(Image.open(filename))
+    a = (1.- a[:,:,0]/255.)  # convert from B&W to zeros and ones.
+    return a    
+
+
+
+# Adapted from code by shawn(?)
+def mask_to_polygons(mask, xmax, ymin, threshold=0.4):
+    all_polygons=[]
+    
+    #print( mask.min(), mask.max()  ) 
+    mask[mask >= threshold] = 1
+    mask[mask < threshold] = 0
+    
+    for shape, value in rasterio.features.shapes(mask.astype(np.int16),
+                                mask = (mask==1),
+                                transform = rasterio.Affine(1.0, 0, 0, 0, 1.0, 0)):
+
+        all_polygons.append(shapely.geometry.shape(shape))
+
+    all_polygons = shapely.geometry.MultiPolygon(all_polygons)
+    if not all_polygons.is_valid:
+        all_polygons = all_polygons.buffer(0)
+        # Sometimes buffer() converts a simple Multipolygon to just a Polygon,
+        # need to keep it a Multi throughout
+        if all_polygons.type == 'Polygon':
+            all_polygons = shapely.geometry.MultiPolygon([all_polygons])
+    
+    # simply the geometry of the masks
+    all_polygons = all_polygons.simplify(grid_resolution, preserve_topology=False)
+    
+    # Transform from pixel coordinates to grid coordinates
+    # FIXME
+    height, width = mask.shape  
+    #width = 1.* width*width/(width+1.)
+    #height = 1.* height*height/(height+1.)
+    #print(width, height)
+    #X = X*X/float(X+1)
+    #Y = Y*Y/float(Y+1)  
+    all_polygons = shapely.affinity.scale(all_polygons, xfact = xmax/width, yfact = ymin/height, origin=(0,0,0))
+    
+    return all_polygons
         
         
+def polygon_jaccard(actual_polygons, predicted_polygons) :
+    true_positive  = predicted_polygons.intersection(actual_polygons).area
+    false_positive = predicted_polygons.area - true_positive
+    false_negative = actual_polygons.area - true_positive
+    intersection = (true_positive+false_positive+false_negative)
+    
+    jaccard = None
+    if intersection !=0 : jaccard = true_positive / intersection
+    
+    return jaccard, true_positive, false_positive, false_negative
+    
+     
+     
+     
+     

@@ -21,7 +21,7 @@ for iid in train_imageIds() :
     for image_type in imageTypes:
         img = load_image(iid, image_type)
         channels, height, width = img.shape
-        print(" ", image_type, ' : ', channels, height, width , "aspect:", width/height, "range:", img.min(), img.max())
+        print(" ", image_type, ' : ', channels, height, width , "aspect:", 1.* width/height, "range:", img.min(), img.max())
         
     
     for ct in classTypes :
