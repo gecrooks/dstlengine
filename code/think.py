@@ -40,7 +40,7 @@ def the_loss(y_true, y_pred):
 
 def think() :
     
-    input_shape=(243, 243, 20)
+    input_shape=(20,243, 243, 20)
     
     model= Sequential()
  

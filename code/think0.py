@@ -63,6 +63,6 @@ def think() :
     
     print(train_samples, val_samples)
     
-    model.fit_generator( train_gen, train_samples/4, 400, validation_data=val_gen, nb_val_samples=val_samples)
+    model.fit_generator( train_gen, train_samples, 400, validation_data=val_gen, nb_val_samples=val_samples)
     
 think()
