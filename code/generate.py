@@ -11,6 +11,7 @@ from keras import backend as K
 def batch_generator(data_dict, labels_dict, coords, batchsize, chunksize=243):
     while 1:
         for i in range(0, len(coords), batchsize):
+            
             data = np.stack([ data_dict[iid][:, x:x+chunksize, y:y+chunksize] 
                         for iid, x, y in coords[i: i+batchsize] ])
             data =  K.cast_to_floatx(data)
@@ -20,8 +21,9 @@ def batch_generator(data_dict, labels_dict, coords, batchsize, chunksize=243):
             labels =  K.cast_to_floatx(labels)
             
             
-            data = np.rollaxis(data, 1, 4) 
-            labels = np.rollaxis(labels, 1, 4) 
+         #   data = np.rollaxis(data, 1, 4) 
+         #   labels = np.rollaxis(labels, 1, 4) 
+            
             
             yield data, labels
             
@@ -49,10 +51,11 @@ def batches(batchsize=32, chunksize = 243) :
         filepath = os.path.join(output_dir, "{}.npy".format(iid) )
         data = np.load(filepath, mmap_mode='r')
         data_dict[iid] = data
+        print(data.shape)
 
         filepath = os.path.join(output_dir, "{}_labels.npy".format(iid) )
         labels = np.load(filepath, mmap_mode='r')
-        labels_dict[iid] = labels
+        labels_dict[iid] = labels #[4]    # Just trees
     
         C, X, Y = data.shape
         coords = []
