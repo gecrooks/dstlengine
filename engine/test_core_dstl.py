@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import core_dstl
 from core_dstl import *
 
 
@@ -8,8 +9,13 @@ def assertAlmostEqual(x,y,acc=7) :
 
 
 # Test progress
-progress("Testing")
+progress("Testing core")
 progress()
+
+# Test getpath
+path = getpath('data', datadir=datadir_default)
+assert(path == 'dstl.data/dstl.hdf5')
+
 
 # Test data
 assert(len(classTypes) == len(class_shortname))
@@ -24,6 +30,16 @@ for cls in filename_to_classType.keys():
 
 assert( os.path.isdir(input_dir) )
 assert( os.path.isdir(output_dir) )
+progress()
+
+# Test round_up
+assert( 100 == core_dstl._round_up(94,10) )
+progress()
+
+# Test feature_loc
+for itype in imageTypes : assert( len( feature_loc[itype] ) == imageChannels[itype] )
+assert(len(range(0,32)[feature_loc['data']]) == 20)
+assert(len(range(0,32)[feature_loc['targets']]) == 10) 
 progress()
 
 
@@ -48,7 +64,7 @@ progress()
 
 
 # Test load_image_sizes
-width, height = image_size('6010_1_2')
+width, height= image_size('6010_1_2')
 assertAlmostEqual( - xmax/ymin, 1.* width/height, acc=4)
 progress()
 
@@ -62,6 +78,19 @@ img = load_image('6010_1_2', 'M')
 assert(img.shape == (8, 837, 849))
 img = load_image('6010_1_2', 'P')
 assert(img.shape == (1, 3348, 3396))
+progress()
+
+
+# Test stretch_to_uint8
+data = np.asarray( range(-1,11), dtype='float' )
+data = stretch_to_uint8(data, 0., 8.)
+assert(127==stretch_to_uint8( np.asarray( range(4,5), dtype='float' ) ,  0., 8.) ) 
+
+
+# Test dynamic_range
+low, high = core_dstl._dynamic_range('3', 0)
+assert(low==124)
+assert(high==763)
 progress()
 
 
@@ -84,73 +113,31 @@ progress()
 assert(len(regionIds())==18)
 progress()
 
-
-# Test imageId_to_region
-assert( imageId_to_region('6020_1_2') == ('6020', 1, 2) )
+# Test parse_viewId
+assert( parse_viewId('6020') == ('6020', None, None, None, None) )
+assert( parse_viewId('6020_1_2') == ('6020', 1, 2, None, None) )
+assert( parse_viewId('6020_5x5') == ('6020', 5, 5, None, None) )
+assert( parse_viewId('6020_X_X') == ('6020', -1, -1, None, None) )
+assert( parse_viewId('6020_1_2_P') == ('6020', 1, 2, 'P', None) )
+assert( parse_viewId('6020_1_2_P_00') == ('6020', 1, 2 ,'P', 0) )
+assert( parse_viewId('XXXX_X_X_X_XX') == ('XXXX', -1, -1, 'X', -1) )
 progress()
 
-
-# Test classId_to_imageId
-assert( classId_to_imageId('6020_1_2_P_10') == ('6020_1_2','P','10') )
-assert( classId_to_imageId('6020_1_2_P') == ('6020_1_2','P', None) )
-assert( classId_to_imageId('6020_1_2') == ('6020_1_2',None, None) )
-progress()
-
-
-# Test imageId_to_classId
-assert( imageId_to_classId('6020_1_2','P','10') =='6020_1_2_P_10')
-assert( imageId_to_classId('6020_1_2','P', None) == '6020_1_2_P')
-assert( imageId_to_classId('6020_1_2',None, None) == '6020_1_2' )
-progress()
-
-
-# Test filename
-fn =filename('6020_1_2','P','10', 'extra', '.quack')
-assert(fn== '../output/6020_1_2_P_10_extra.quack')
+# Test compose_viewId
+assert( ('6020') == compose_viewId('6020', None, None, None, None) )
+assert( ('6020_1_2') == compose_viewId('6020', 1, 2, None, None) )
+assert( ('6020_5x5') == compose_viewId('6020', 5, 5, None, None) )
+assert( ('6020_1_2_P') == compose_viewId('6020', 1, 2, 'P', None) )
+assert( ('6020_1_2_P_00') == compose_viewId('6020', 1, 2 ,'P', 0) )
 progress()
 
 
 
 
-# Test class_polygons_to_composite
-iid= '6010_1_2'
-class_polygons = wkt_polygons[iid]
-fn = filename(iid, extra = 'test_composite')
-class_polygons_to_composite(class_polygons, xmax, ymin, width, height, fn, outline=False)
-fn = filename(iid, extra = 'test_outline')
-class_polygons_to_composite(class_polygons, xmax, ymin, width, height, fn, outline=True)
-progress()
+
+progress('done')
 
 
-# Test polygons_to_mask
-polygons = wkt_polygons['6010_1_2'][4]
-assert(len(polygons) == 12)
-xmax, ymin = grid_sizes['6010_1_2']
-width, height = image_size('6010_1_2')
-polygons_to_mask(polygons, xmax, ymin, width, height, filename=None)
-progress()
-
-
-# Test mask_to_polygons
-actual_polygons = wkt_polygons['6010_1_2'][4]
-assert(len(actual_polygons) == 12)
-xmax, ymin = grid_sizes['6010_1_2']
-width, height = image_size('6010_1_2')
-mask = polygons_to_mask(actual_polygons, xmax, ymin, width, height)
-predicted_polygons = mask_to_polygons(mask, xmax, ymin)
-new_mask = polygons_to_mask(actual_polygons, xmax, ymin, width, height)
-progress()
-
-
-# Test polygon_jaccard
-jaccard, tp, fp, fn = polygon_jaccard(actual_polygons, predicted_polygons)
-assert(jaccard>0.9)
-#print(jaccard, tp, fp, fn)
-progress()
-
-
-
-progress('Done')
 
         
 

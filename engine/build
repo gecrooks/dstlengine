@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+
+# Run with 
+#   ./build init
+#   ./build data    {region} {--only_train}
+#   ./build targets {region} 
+#   ./build view    {region}
+
+import argparse
+from core_dstl import *
+import build_dstl
+
+
+def main():
+    # Parse args and run command    
+    parser = _arg_parser()
+    args = parser.parse_args()
+    opts = vars(args)    
+    func = opts.pop('func')
+    func(**opts)
+       
+
+    
+def _arg_parser():     
+    main_parser = argparse.ArgumentParser(
+                    description=description,
+                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+                    
+    subparsers = main_parser.add_subparsers(title='Commands',
+                                        description=None,
+                                        help="-h, --help Additional help",)
+                                        
+    main_parser.add_argument('--version', action='version', version=version )
+    
+    # If no subcommand print help message
+    main_parser.set_defaults(func = lambda args:parser.print_help() )     
+    
+    # ===== Common options =====
+    main_parser.add_argument('-d', '--data', 
+                          action='store', 
+                          dest = 'datadir',
+                          default = datadir_default,
+                          metavar = 'PATH',
+                          help='Location to store and process data')
+  
+ 
+   
+    # ====== Build everything ====     
+    def build_all(datadir) :
+        import test_core_dstl
+        import test_build_dstl
+        build_dstl.build_init(datadir)
+        build_dstl.build_data(datadir)
+        build_dstl.build_targets(datadir)      
+                                      
+    parser = subparsers.add_parser('all', 
+                help='Build everything (test, init, data, targets)')         
+    parser.set_defaults(func=build_all)
+         
+                        
+        
+    # ===== Init =====
+    parser = subparsers.add_parser('init', 
+                help='Initilize new dataset')    
+                          
+    parser.set_defaults(func=build_dstl.build_init)
+    
+
+    # === build data ===
+    parser = subparsers.add_parser('data', 
+                    help='Process raw dstl data')   
+                       
+    parser.set_defaults(func=build_dstl.build_data)
+    
+    parser.add_argument('regions', 
+                        nargs='*',
+                        metavar = 'regionId',
+                        help = "Optinal list of regions to process. "
+                                "Defaults to all regions. Will also accept 'all' and 'train'"
+                        )
+                        
+    parser.add_argument('-t','--type',        
+                        action='store', 
+                        default='all', 
+                        dest = 'imageType',
+                        help='image type (3,P,M,A,all)')
+                               
+    parser.add_argument('-c', '--channel', 
+                        action='store', 
+                        default=None, 
+                        type = int,
+                        dest = 'channel',
+                        help='Channel')
+    
+    parser.add_argument('--train_only', 
+                        action='store_true', 
+                        default=False, 
+                        help='')
+ 
+    
+    # === build targets ===   
+    parser = subparsers.add_parser('targets', 
+                    help='Process raw dstl data to create target data')
+    parser.set_defaults(func=build_dstl.build_targets)
+
+
+    # === build composites === FIXME: One at a time    
+    parser = subparsers.add_parser('composites', 
+                    help='Create composite images of target masks' )
+    parser.set_defaults(func=build_dstl.build_composites)
+    
+    parser.add_argument('--fill', 
+                            dest = 'outline',
+                            action='store_false', 
+                            default=True, 
+                            help='Filled masks (rather than outlines) ')
+    
+    
+    
+    # === build images ===                               
+    parser = subparsers.add_parser('image', 
+         help='Convert region data to viewable graphics in png format',
+         )
+    parser.set_defaults(func=build_dstl.build_images)
+
+    parser.add_argument('imageIds', 
+                        nargs='+',
+                        metavar = 'imageIds',
+                        help = "Optinal list of regions to process. "
+                        )
+                        
+    
+    parser.add_argument('--scale', 
+                            action='store', 
+                            default=0.2, 
+                            type=float,
+                            help='Rescale image')
+                            
+    parser.add_argument('--composite', 
+                            action='store_true', 
+                            default=False, 
+                            help='')
+
+ 
+    # === Test ===
+    def test(datadir):
+        import test_core_dstl
+        import test_build_dstl
+    
+    parser = subparsers.add_parser('test', help='Run core_dstl tests')
+    parser.set_defaults(func=test)
+    
+
+
+
+
+
+    # End construction of argument parser
+    return main_parser
+
+
+    
+    
+
+if __name__ == "__main__":
+    main()
+

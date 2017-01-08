@@ -7,6 +7,7 @@ __pycache__
 three_band/
 sixteen_band/
 input/
+output/
 
 *.png
 *.tif
@@ -16,6 +17,7 @@ input/
 *.jpg
 *.pyc
 *.swp
+*.data
 nohup.out
 
 junk/
