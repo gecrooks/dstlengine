@@ -247,8 +247,8 @@ def build_composites(datadir, outline = True):
 
 def polygons_to_composite(class_polygons, xmax, ymin, width, height, filename, outline=True) :
      """ If outline is true, create transparent outline of classes suitable for layering over other images."""
-     width /= dpi
-     height /= dpi
+     width /= float(dpi)
+     height /= float(dpi)
      
      fig = plt.figure(figsize=(width,height), frameon=False)
      axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
@@ -286,8 +286,8 @@ def polygons_to_composite(class_polygons, xmax, ymin, width, height, filename, o
 
 
 def polygons_to_mask(multipolygon, xmax, ymin, width, height, filename=None) :
-     width /= dpi
-     height /= dpi    
+     width /= float(dpi)
+     height /= float(dpi)    
      fig = plt.figure(figsize=(width,height), frameon=False)
      axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
      axes.set_axis_off()         
