@@ -9,6 +9,11 @@ import h5py
 
    
 def build_init(datadir):
+    """input: file path to image datset
+       writes directory file structure for .h5 data and 
+       writes image data with 
+    """
+    
     progress('Initilizing dataset...')
   
     import os

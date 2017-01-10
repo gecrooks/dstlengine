@@ -342,10 +342,10 @@ def stretch_to_uint8(data, low, high):
 
 
 
-low_percent_defualt=2
+low_percent_default=2
 high_percent_default=98
 
-def _dynamic_range(imageType, imageChannel, low_percent=low_percent_defualt, high_percent=high_percent_default) :
+def _dynamic_range(imageType, imageChannel, low_percent=low_percent_default, high_percent=high_percent_default) :
     """ Calculate the effective dynamic range of an image channel
     returns (low, high)
     """
