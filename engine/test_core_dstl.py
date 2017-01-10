@@ -33,7 +33,7 @@ assert( os.path.isdir(output_dir) )
 progress()
 
 # Test round_up
-assert( 100 == core_dstl._round_up(94,10) )
+assert( 100 == core_dstl.roundup(94,10) )
 progress()
 
 # Test feature_loc
@@ -44,16 +44,17 @@ progress()
 
 
 # Test load_wkt_polygons
-wkt_polygons = load_wkt_polygons()
+wkt_polygons = load_wkt_polygons(['6010_1_2','6060_2_3'] )
 assert( len(wkt_polygons['6060_2_3'])==10 )
 assert( len(wkt_polygons['6010_1_2'][5])==1733) # trees
+assert( wkt_polygons['6060_2_3'][2].is_valid)
 progress()
-
-#for iid, class_polygons in polygons.items() :
+#for iid, class_polygons in wkt_polygons.items() :
 #    for ct in classTypes :
 #        multipolygon = class_polygons[ct]
-#        print('{} : {} {} \tcount = {}'.format(iid, ct, class_shortnames[ct], len(multipolygon)))
+#        print('{} : {} {} \tcount = {}'.format(iid, ct, class_shortname[ct], len(multipolygon)))
  
+
 
 # Test load_grid_sizes
 grid_sizes = load_grid_sizes()

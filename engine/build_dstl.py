@@ -26,7 +26,7 @@ def build_init(datadir):
         dataset = datafile.create_dataset(region, 
                (nb_features,region_height, region_width), 
                dtype = 'uint8', 
-               chunks = hdf5_chunksize,
+               chunks = hdf5_chunks,
                compression = hdf5_compression,)
           
     progress('done')
