@@ -1,11 +1,19 @@
+
+"""
+DSTL Prognostication Engine: Core code
+"""
+
+
 from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
 
 
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 import pandas
 
 import shapely
@@ -18,9 +26,14 @@ import rasterio.features
 
 import h5py
 
+import descartes
 from descartes.patch import PolygonPatch
+
 import tifffile as tiff
+
+import PIL
 from PIL import Image
+
 import numpy as np
 
 import os
@@ -30,7 +43,29 @@ import tempfile
 import sys
 
 description = 'DSTL Prognostication Engine'
-version = 'alpha'
+version = '0.0.0'
+
+# python -c 'import core_dstl; core_dstl.package_versons()'
+def package_versions() :
+    print('python   \t', sys.version[0:5] )
+    print('numpy    \t', np.__version__ )
+    print('matplotlib\t', matplotlib.__version__, '\t(',matplotlib.get_backend(),'backend )')
+    print('tifffile  \t', tiff.__version__)
+    print('shapely   \t', shapely.__version__)
+    print('pandas    \t', pandas.__version__)
+    print('rasterio  \t', rasterio.__version__)
+    print('h5py      \t', h5py.__version__)
+    print('descartes\t',  '???')
+    print('pillow (PIL)\t', PIL.__version__)
+    
+    import theano
+    print('theano     \t', theano.__version__)   
+     
+    import keras
+    print('keras     \t', keras.__version__)
+
+
+
 
 # Give short names, sensible colors and zorders to object types
 # Adapted from @amanbh
@@ -182,7 +217,7 @@ dpi = 512
 # Canonical width and height of each image. 
 # The '3' band images are always almost this size, within a few pixels,
 # except the right and bottom boundary images (of a 5x5 region), 
-# which can be smaller.
+# which can be cropped smaller.
 std_height = 3348
 std_width = 3396
 
@@ -194,22 +229,35 @@ std_ymin = - 2.7 * grid_resolution * std_height
  
 
 
-# Maximum size of chunks (width and height) we test and train on.
-chunksize = 64  
+# Maximum size of tiles (width and height) we test and train on.
+tilesize = 64
+tileborder = 64
+
+# deprecate: Replace with tilesize and tileborder
+chunksize = tilesize
 
 
-# Minimum border of zero data around valid data
-# Should be several times chunksize
-border = 256 
+
+# Minimum border of zero data around valid data in a region
+# Should be several times tileborder. 
+regionborder = 256
+border = regionborder    # deprecate (ambiguous)
 
 
 
 # Either "gzip" (moderate speed, good compression) or 'lzf' (very fast, moderate compression)
 hdf5_compression = 'gzip'
-hdf5_chunksize = (64,128,128)   # or True for autochunking 
+
+# Chunksize optimized for training rather than data creation.
+# autochunking dramatically improves data creation time,
+# but slows batch read time
+# hdf5_chunks = (64,128,128) 
+hdf5_chunks = True  # autochunking
+
+
 
 # Round up to next size
-def _round_up(x, size) : return ( (x+size-1) // size ) * size
+def roundup(x, size) : return ( (x+size-1) // size ) * size
 
 
 # Height and width of a 5x5 region in pixels
@@ -240,6 +288,7 @@ feature_loc = {
             # Class zero not used (yet)
             'C': (-1,22,23,24,25,26,27,28,29,30,31) }
 
+
 verbose = True
 def progress(string = None) :
     if verbose :
@@ -260,19 +309,28 @@ def load_train_wkt() :
     return data
 
 
-def load_wkt_polygons():
+def load_wkt_polygons(imageIds = None):
+    if imageIds is None : imageIds = train_imageIds()
+
     polygons = {}
     td = load_train_wkt() 
     
-    for iid in train_imageIds():
+    for iid in imageIds:
         df_image = td[td.imageId == iid]
         classPolygons = {}
-        for classType in classTypes:
-            multipolygon = wkt.loads(df_image[df_image.classType == classType].wkt.values[0])
-            classPolygons[classType] = multipolygon
+        for ctype in classTypes:
+            multipolygon = wkt.loads(df_image[df_image.classType == ctype].wkt.values[0])
+            
+            # At least one polygon in the training data is invalid. Fix (Kudos: amanbh)
+            # https://www.kaggle.com/amanbh/dstl-satellite-imagery-feature-detection/dealing-with-invalid-polygons    
+            if not multipolygon.is_valid : 
+                multipolygon = multipolygon.buffer(0)
+                progress('Fixed invalid multipolygon {} {}'.format(iid, ctype) )
+                 
+            classPolygons[ctype] = multipolygon
+            
         polygons[iid] = classPolygons
     return polygons
-        
 
 def load_sample_submission() :  
     names = ("imageId", "classType", "wkt")
@@ -295,6 +353,7 @@ def load_grid_sizes():
     
     return gs
     
+    
 # Confusion reigns. We typicaly report image size as (width x height)
 # Convention is that origin is top left.
 # x-axis is width, negative y-axis is height
@@ -309,8 +368,6 @@ def image_size(imageId):
     return (width, height)
    
        
-    
-
 def load_image(imageId, imageType):
     """Load a tiff image from input data
     imageType is one of 3, A, M or P
@@ -411,9 +468,9 @@ def parse_viewId(viewId) :
     5x5     Entire 5x5 region
     T       Type character. (e.g. '6010_2_1_P_00' -> 'P')
                 '3', 'P', 'M', 'A'  image types
-                'C'                 catogories
-                'E'                 extended catagories
-                'N'                 Direct reference to dstl data
+                'C'                 categories
+                'E'                 extended categories (not used yet)
+                'N'                 Direct reference to dstl data (not implemented yet)
     CC      Two digit channel number, return as int (e.g. '6010_2_1_P_00' -> 0)
     
     """
@@ -545,5 +602,9 @@ sample_filename = os.path.join(input_dir,"sample_submission.csv")
    
 
 # ===== END DEPRECATED  =====
-     
+
+if __name__ == "__main__":
+    import core_dstl
+    help(core_dstl)
+
      
