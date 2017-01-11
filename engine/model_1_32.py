@@ -21,9 +21,9 @@ def create(filename) :
     
     model= Sequential()
     
-    model.add( BatchNormalization(axis=1) )
+    model.add( BatchNormalization(axis=1),input_shape=input_shape )
  
-    model.add( Convolution2D(features, 1,1, activation='relu', border_mode='valid', input_shape=input_shape) )
+    model.add( Convolution2D(features, 1,1, activation='relu', border_mode='valid') )
         
     model.add( Convolution2D(features, 3,3, activation='relu', border_mode='valid') )
     model.add( AtrousConvolution2D(features, 3,3, activation='relu', border_mode='valid', atrous_rate=(2,2)) )    
