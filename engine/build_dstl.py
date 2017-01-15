@@ -197,8 +197,8 @@ def build_image(datadir, viewId, scale=None, composite=False) :
 
         if scale != 1.0:
             width, height = img.size
-            width = round( width*scale ) 
-            height = round( height* scale)       
+            width = int(round( width*scale ) )
+            height = int(round( height* scale))       
             img = img.resize( ( width, height ) , resample = Image.BICUBIC)  
         
     return img
@@ -247,6 +247,7 @@ def build_composites(datadir, outline = True):
 
 def polygons_to_composite(class_polygons, xmax, ymin, width, height, filename, outline=True) :
      """ If outline is true, create transparent outline of classes suitable for layering over other images."""
+
      width /= float(dpi)
      height /= float(dpi)
      
@@ -288,6 +289,7 @@ def polygons_to_composite(class_polygons, xmax, ymin, width, height, filename, o
 def polygons_to_mask(multipolygon, xmax, ymin, width, height, filename=None) :
      width /= float(dpi)
      height /= float(dpi)    
+
      fig = plt.figure(figsize=(width,height), frameon=False)
      axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
      axes.set_axis_off()         
@@ -329,15 +331,11 @@ def mask_to_polygons(mask, xmax, ymin, threshold=0.4):
          all_polygons.append(shapely.geometry.shape(shape))
 
      all_polygons = shapely.geometry.MultiPolygon(all_polygons)
-     if not all_polygons.is_valid:
-         all_polygons = all_polygons.buffer(0)
-         # Sometimes buffer() converts a simple Multipolygon to just a Polygon,
-         # need to keep it a Multi throughout
-         if all_polygons.type == 'Polygon':
-             all_polygons = shapely.geometry.MultiPolygon([all_polygons])
     
      # simply the geometry of the masks
      all_polygons = all_polygons.simplify(grid_resolution, preserve_topology=False)
+    
+    
     
      # Transform from pixel coordinates to grid coordinates
      # FIXME
@@ -348,6 +346,16 @@ def mask_to_polygons(mask, xmax, ymin, threshold=0.4):
      #X = X*X/float(X+1)
      #Y = Y*Y/float(Y+1)  
      all_polygons = shapely.affinity.scale(all_polygons, xfact = xmax/width, yfact = ymin/height, origin=(0,0,0))
+    
+    
+     if not all_polygons.is_valid:
+         all_polygons = all_polygons.buffer(0)
+     
+     # Sometimes buffer() converts a simple Multipolygon to just a Polygon,
+     # need to keep it a Multi throughout
+     if all_polygons.type == 'Polygon':
+        all_polygons = shapely.geometry.MultiPolygon([all_polygons])
+    
     
      return all_polygons
         

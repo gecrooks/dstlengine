@@ -92,8 +92,9 @@ class_color = {
         4 : '#dfc27d',
         5 : '#1b7837',
         6 : '#a6dba0',
-        7 : '#74add1',
-        8 : '#4575b4',
+      #  7 : '#74add1',
+        7:  '#40a4df',            # Waterway 'Clear Water Blue'
+        8 : '#4575b4',       
         9 : '#f46d43',
         10: '#d73027',
         }
@@ -174,19 +175,25 @@ imageChannels = {'3':3, 'A':8, 'M':8, 'P':1}
 imageType_names = {
     '3': '3-band',
     'P' : 'Panchromatic',
-    'M' : 'Multi-spectral',
-    'A' : '???'
+    'M' : 'Multispectral',
+    'A' : 'SWIR'
     }
 
 
 
 
 
-sourcedir = os.path.join('..','input')
+sourcedir_default = os.path.join('..','input')
+sourcedir = sourcedir_default   # deprecate
+
 datadir_default = 'dstl.data'
 
 
+
 verbose = True
+
+train_wkt_fname = 'train_wkt_v4.csv'
+grid_sizes_fname = 'grid_sizes.csv'
 
 
 
@@ -288,6 +295,55 @@ feature_loc = {
             # Class zero not used (yet)
             'C': (-1,22,23,24,25,26,27,28,29,30,31) }
 
+# Note: bands not channels
+
+
+# Kudos: @FPP_UK
+#
+#   If you look at the TIFF metadata you get the following info:
+#   [3-bands] 6nnn_n_n: TIFFTAG_IMAGEDESCRIPTION={ bandlist = [ 4; 3; 2;] }
+#   [16-bands] 6nnn_n_n_M: TIFFTAG_IMAGEDESCRIPTION={ bandlist = [ 6; 2; 3; 7; 4; 8; 5; 9;] }
+#   [SWIR] 6nnn_n_n_A: TIFFTAG_IMAGEDESCRIPTION={ bandlist = [ 10; 11; 12; 13; 14; 15; 16; 17;] }
+
+# This means that the 3-band images are actually redundant with 3 of the Multispectral bands.
+# However the corresponding images appear to be translated by a pixel or two.
+# Apparently the polygons are registered to the 3-band images (?), so if we ignore any bands it should
+# be the 2nd, 3rd and 5th Multispectral bands.
+
+
+banklists = { 
+    'P' : (1),
+    '3' : (4, 3, 2) ,
+    'M' : ( 6, 2, 3, 7, 4, 8, 5, 9) , 
+    'A' : ( 10, 11, 12, 13, 14, 15, 16, 17)
+    }
+
+#
+# Based on the WorldView online bandwidth info and QGis extracted bandlist metadata and data description
+#
+# Sensor-Bands :  WV3-Type, WV3-label, WV3range, Image-ID Notes
+# Kudos: @FPP_UK
+bandinfo = {
+    1 : ('Panchromatic', 'Panchromatic', '450-800nm', '6xxx_n_n_P 0.31m resolution'),
+    2 : ('Multi-spectral', 'Coastal', '400-450nm', '6xxx_n_n_M, RGB 1.24m resolution'),
+    3 : ('Multi-spectral', 'Blue', '450-510nm', '6xxx_n_n_M, RGB 1.24m resolution'),
+    4 : ('Multi-spectral', 'Green', '510-580nm', '6xxx_n_n_M, RGB 1.24m resolution'),
+    5 : ('Multi-spectral', 'Yellow', '585-625nm', '6xxx_n_n_M 1.24m resolution'),
+    6 : ('Multi-spectral', 'Red', '630-690nm', '6xxx_n_n_M 1.24m resolution'),
+    7 : ('Multi-spectral', 'Red Edge', '705-745nm', '6xxx_n_n_M 1.24m resolution'),
+    8 : ('Multi-spectral', 'Near-IR1', '770-895nm', '6xxx_n_n_M 1.24m resolution'),
+    9 : ('Multi-spectral', 'Near-IR2', '860-1040nm', '6xxx_n_n_M 1.24m resolution'),
+    10 : ('SWIR', 'SWIR-1', '1195-1225nm', '6xxx_n_n_A resolution reduced from 3.7m to 7.5m'),
+    11 : ('SWIR', 'SWIR-2', '1550-1590nm', '6xxx_n_n_A resolution reduced from 3.7m to 7.5m'),
+    12 : ('SWIR', 'SWIR-3', '1640-1680nm', '6xxx_n_n_A resolution reduced from 3.7m to 7.5m'),
+    13 : ('SWIR', 'SWIR-4', '1710-1750nm', '6xxx_n_n_A resolution reduced from 3.7m to 7.5m'),
+    14 : ('SWIR', 'SWIR-5', '2145-2185nm', '6xxx_n_n_A resolution reduced from 3.7m to 7.5m'),
+    15 : ('SWIR', 'SWIR-6', '2185-2225nm', '6xxx_n_n_A resolution reduced from 3.7m to 7.5m'),
+    16 : ('SWIR', 'SWIR-7', '2235-2285nm', '6xxx_n_n_A resolution reduced from 3.7m to 7.5m'),
+    17 : ('SWIR', 'SWIR-8', '2295-2365nm', '6xxx_n_n_A resolution reduced from 3.7m to 7.5m') 
+}
+
+
 
 verbose = True
 def progress(string = None) :
@@ -301,19 +357,46 @@ def progress(string = None) :
         sys.stdout.flush()
 
 
+class WktPolygons:
+    def __init__(self, dir=sourcedir, fname = train_wkt_fname) :
+        fn = os.path.join(dir, fname)
+        names = ("imageId", "classType", "wkt")
+        data = pandas.read_csv(fn, names=names, skiprows=1)
+        self._data = data
+    
+    def __getitem__(self, imageId) :
+        td = self._data
+        df_image = td[td.imageId == imageId]
+        classPolygons = {}
+        for ctype in classTypes:
+            multipolygon = wkt.loads(df_image[df_image.classType == ctype].wkt.values[0])
+            
+            # At least one polygon in the training data is invalid. Fix (Kudos: amanbh)
+            # https://www.kaggle.com/amanbh/dstl-satellite-imagery-feature-detection/dealing-with-invalid-polygons    
+            if not multipolygon.is_valid : 
+                multipolygon = multipolygon.buffer(0)
+                progress('[Fixed invalid multipolygon {} {}]'.format(imageId, ctype) )
+                 
+            classPolygons[ctype] = multipolygon
+            
+        return classPolygons
+        
+    
+    
 
-def load_train_wkt() :  
+def load_train_wkt(sdir = sourcedir, fname = train_wkt_fname) :  
+    fn = os.path.join(sdir, fname)
+    
     names = ("imageId", "classType", "wkt")
-    fn = getpath('train_wkt')
     data = pandas.read_csv(fn, names=names, skiprows=1)
     return data
 
 
-def load_wkt_polygons(imageIds = None):
+def load_wkt_polygons(imageIds = None, sdir = sourcedir, fname = train_wkt_fname):
     if imageIds is None : imageIds = train_imageIds()
 
     polygons = {}
-    td = load_train_wkt() 
+    td = load_train_wkt(sdir, fname) 
     
     for iid in imageIds:
         df_image = td[td.imageId == iid]
@@ -332,33 +415,116 @@ def load_wkt_polygons(imageIds = None):
         polygons[iid] = classPolygons
     return polygons
 
+
+
+
 def load_sample_submission() :  
     names = ("imageId", "classType", "wkt")
     data = pandas.read_csv(sample_filename, names=names, skiprows=1)
     return data
 
 
-def load_grid_sizes():
+class GridSizes(dict):
+    def __init__(self, dir=sourcedir, fname='grid_sizes.csv'):
+        fn = os.path.join(dir, fname)
+    
+        with open(fn) as csvfile:
+            reader = csv.reader(csvfile) 
+            next(reader)    # skip header row
+            for row in reader :
+                iid = row[0]
+                xmax = float(row[1])
+                ymin = float(row[2])
+                self[iid] = (xmax, ymin)
+
+
+
+def load_grid_sizes(dir=sourcedir, fname='grid_sizes.csv'):
     """Return a dictionary from imageIds to (xmax, ymin) tuples """  
-    gs = {}
-    fn = getpath('grid_sizes')
-    with open(fn) as csvfile:
-        reader = csv.reader(csvfile) 
-        next(reader)    # skip header row
-        for row in reader :
-            iid = row[0]
-            xmax = float(row[1])
-            ymin = float(row[2])
-            gs[iid] = (xmax, ymin)
+    progress('[load_grid_sizes deprecated]')
+    return GridSizes()
+ 
+ #   gs = {}
+ #   fn = os.path.join(dir, fname)
     
-    return gs
+ #   with open(fn) as csvfile:
+ #       reader = csv.reader(csvfile) 
+ #       next(reader)    # skip header row
+ #       for row in reader :
+ #           iid = row[0]
+ #           xmax = float(row[1])
+ #           ymin = float(row[2])
+ #           gs[iid] = (xmax, ymin)
+    
+ #   return gs
     
     
+    
+### Coordinate transforms ###
+   
 # Confusion reigns. We typicaly report image size as (width x height)
 # Convention is that origin is top left.
 # x-axis is width, negative y-axis is height
 # But Image arrays are organized as height (rows) by width (columns)
 # aspect ratio is width/height
+
+# We'll use (x,y) for grid, (col, row) for raster
+# (icol, irow) location within an image
+# (icol, irow) location within a region
+
+# Kaggle specifies an off-by-one correction for the gird to image coordiantes that makes no sense
+#    width = 1.0*W*W/(W+1.) 
+#    height = 1.0*H*H/(H+1.)
+# But this is very nearly width = W-1, height = H-1, which does make sense. So we'll use that.
+
+
+def grid_to_image_coords(coords, image_size = (std_width, std_height), grid_size = (std_xmax, std_ymin) ) :
+    x, y = coords
+    W, H = image_size
+    xmax, ymin = grid_size  
+    
+    col = x * (W-1.) / xmax
+    row = - y * (H-1.) / ymin
+    
+    return col, row
+    
+    
+def image_to_grid_coords(coords, image_size = (std_width, std_height), grid_size = (std_xmax, std_ymin) ) :
+    col, row = coords
+    W, H = image_size
+    xmax, ymin = grid_size
+    
+    x = col * xmax / (W-1.)
+    y = - row * ymin / (H-1.)
+ 
+    return x, y
+ 
+ 
+     
+def image_to_region_coords(coords, subregion, image_size=(std_width, std_height), border=regionborder) :
+    icol, irow = coords
+    reg_col, reg_row = subregion
+    W, H = image_size
+    
+    rcol = icol + border + reg_col *W
+    rrow = irow + border + reg_row *H
+    
+    return rcol, rrow
+     
+     
+def region_to_image_coords(coords, subregion, image_size = (std_width, std_height), border=regionborder) :
+    rcol, rrow = coords
+    reg_col, reg_row = subregion
+    W, H = image_size
+    
+    icol = rcol - border - reg_col * W
+    irow  = rrow - border - reg_row * H
+    
+    return icol, irow
+    
+
+
+
 
 def image_size(imageId):
     """ Return the canonical (width, height) in pixels of a image region"""
@@ -453,6 +619,7 @@ def test_imageIds() :
 # Return a list of all unique region ids
 def regionIds():
     return sorted(set( [iid[0:4] for iid in imageIds()]) )
+
 
 
   
