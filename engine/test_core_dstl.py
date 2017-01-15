@@ -17,6 +17,8 @@ path = getpath('data', datadir=datadir_default)
 assert(path == 'dstl.data/dstl.hdf5')
 
 
+
+
 # Test data
 assert(len(classTypes) == len(class_shortname))
 assert(len(classTypes) == len(class_color))
@@ -54,20 +56,69 @@ progress()
 #        multipolygon = class_polygons[ct]
 #        print('{} : {} {} \tcount = {}'.format(iid, ct, class_shortname[ct], len(multipolygon)))
  
+ 
+wkt_polygons = WktPolygons() 
+assert( len(wkt_polygons['6060_2_3'])==10 )
+assert( len(wkt_polygons['6010_1_2'][5])==1733) # trees
+assert( wkt_polygons['6060_2_3'][2].is_valid)
+progress()
+ 
+ 
+ 
 
-
-# Test load_grid_sizes
-grid_sizes = load_grid_sizes()
-xmax, ymin = grid_sizes['6010_1_2']
+# test load_grid_size
+gs = load_grid_sizes()
+xmax, ymin = gs['6010_1_2']
 assertAlmostEqual(xmax,  0.009169) 
 assertAlmostEqual(ymin, -0.009042)
 progress()
+
+
+gs = GridSizes()
+xmax, ymin = gs['6010_1_2']
+assertAlmostEqual(xmax,  0.009169) 
+assertAlmostEqual(ymin, -0.009042)
+progress()
+
+
 
 
 # Test load_image_sizes
 width, height= image_size('6010_1_2')
 assertAlmostEqual( - xmax/ymin, 1.* width/height, acc=4)
 progress()
+
+
+
+# Test grid_to_image_coords 
+(x,y) = image_to_grid_coords( grid_to_image_coords( (0.6, 0.4) )  )
+assertAlmostEqual( x, 0.6)
+assertAlmostEqual( y, 0.4)
+
+col,row = grid_to_image_coords( (0.0, -1.0), image_size=(100,100), grid_size=(1.,1.) )
+#print(col,row)
+assertAlmostEqual(col, 0.0)
+assertAlmostEqual(row, 99.)
+
+
+# Test image_to_grid_coords
+(col, row) = grid_to_image_coords( image_to_grid_coords( (1000, 2000) ) )
+assertAlmostEqual( col, 1000)
+assertAlmostEqual( row, 2000)
+
+
+# Test image_to_region_coords
+rcol, rrow = image_to_region_coords( (100,200), (2,3), image_size=(1000,1000), border=50) 
+assert(rcol == 2150)
+assert(rrow == 3250)
+
+# Test region_to_image_coords
+rcol, rrow = image_to_region_coords( (100,200), (2,3) ) 
+icol, irow = region_to_image_coords( (rcol, rrow) , (2,3) )
+assert(icol==100)
+assert(irow ==200)
+
+
 
 
 # Test load_image
