@@ -558,6 +558,7 @@ def stretch_to_uint8(data, low, high):
     """ Stretch the dynamic range of an array to 8 bit data [0,255]
     Numbers outside range (low, high) are clipped to [0,255]
     """
+    data = data.astype(np.float32)
     stretched = 255.* (data - low) / (high - low)    
     stretched[stretched<0] = 0
     stretched[stretched>255] = 255
@@ -565,8 +566,8 @@ def stretch_to_uint8(data, low, high):
 
 
 
-low_percent_default=2
-high_percent_default=98
+low_percent_default=0.1
+high_percent_default=99.9
 
 def _dynamic_range(imageType, imageChannel, low_percent=low_percent_default, high_percent=high_percent_default) :
     """ Calculate the effective dynamic range of an image channel

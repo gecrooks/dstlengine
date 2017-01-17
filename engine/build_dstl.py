@@ -2,7 +2,7 @@
 from core_dstl import *
 import core_dstl
 import h5py
-
+import cv2
 #
 # Process the raw dstl data.
 #
@@ -124,6 +124,97 @@ def _process_image(datadir,region, reg_row, reg_col, imageType, channel) :
                        
     return img
  
+    
+    
+def align( datadir,
+            regions = None,
+            imageType = None,
+            channel = None,
+            dry_run = False,
+            ) :      
+    progress('Re-registering images...\n') 
+      
+    datafile = h5py.File( getpath('data', datadir=datadir), 'r+') 
+    
+    if not regions or regions == ['all']:
+        regions = regionIds()
+ 
+    if not imageType or imageType == 'all': 
+        imageTypes = ('A', 'M', 'P')
+    else:
+        imageTypes = [imageType,]
+ 
+ 
+    progress('done')
+ 
+    for region in regions:
+        progress('    ' + region)
+        
+        dataset = datafile[region]
+                
+        for itype in imageTypes : 
+            if channel is not None :
+                channels = [channel,]
+            else :
+                channels = range(0,imageChannels[itype])
+
+            for chan in channels :
+                img = _align_region(datadir, region, itype, chan, dry_run)
+                progress()
+                
+        progress('done')
+
+    datafile.close()
+    progress('done')
+
+def _align_region(datadir, region, itype, chan, dry_run):
+    """ """
+    
+    datafile = h5py.File( getpath('data', datadir=datadir), 'r+')
+    # grab dataset for specific region
+    dataset = datafile[region]
+    
+    window_size = 4096
+    start = region_height //2 - window_size //2
+    end = start + window_size
+    
+    f1 = feature_loc['3'][0]
+    f2 = feature_loc[itype][chan]
+    
+    img1 = dataset[f1, start:end, start:end].astype(np.float32)
+    img2 = dataset[f2, start:end, start:end].astype(np.float32)
+    
+    warp_mode = cv2.MOTION_TRANSLATION
+    #warp_mode = cv2.MOTION_AFFINE
+    warp_matrix = np.eye(2,3, dtype=np.float32)
+    
+    try:
+        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 1000,  1e-5)
+        (cc, warp_matrix) = cv2.findTransformECC (img1, img2, warp_matrix, warp_mode, criteria)
+    except cv2.error:
+	print('findTransformEEC Failed to converge: {}_5x5_{}_{}'.format(region, itype, chan) )    
+        return
+
+
+
+
+    print("register {} {}".format(itype, chan))
+    print("cc:{}".format(cc))
+    print(warp_matrix)
+    
+    img1 = dataset[f1, :, :].astype(np.float32)
+    img2 = dataset[f2, :, :].astype(np.float32)
+    img3 = cv2.warpAffine(img2, warp_matrix, (img1.shape[1], img1.shape[0]), 
+                          flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+    
+    if not dry_run:
+        progress('saving aligned image')
+
+        dataset[f2, :, :] = img3.astype(np.uint8)
+ 
+    
+    
+
 
 # Create visualizations of the  data    
 
@@ -145,7 +236,7 @@ def build_images(datadir, imageIds, scale=None, composite=False) :
         
         for itype in itypes:
           
-            if not channel or channel == '*' : 
+            if channel is None or channel == '*' : 
                 channels = range(0, imageChannels[itype])
             else:
                 channels = [channel,]

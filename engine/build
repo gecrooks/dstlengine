@@ -47,12 +47,12 @@ def _arg_parser():
    
     # ====== Build everything ====     
     def build_all(datadir) :
-        import test_core_dstl
-        import test_build_dstl
+        #import test_core_dstl
+        #import test_build_dstl
         build_dstl.build_init(datadir)
         build_dstl.build_data(datadir)
         build_dstl.build_targets(datadir)      
-                                      
+        build_dstl.align(datadir)                               
     parser = subparsers.add_parser('all', 
                 help='Build everything (test, init, data, targets)')         
     parser.set_defaults(func=build_all)
@@ -103,7 +103,39 @@ def _arg_parser():
                     help='Process raw dstl data to create target data')
     parser.set_defaults(func=build_dstl.build_targets)
 
-
+    
+    # === register images ===
+    parser = subparsers.add_parser('align', 
+                    help='Register image channel to 3-band image')   
+                       
+    parser.set_defaults(func=build_dstl.align)
+    
+    parser.add_argument('regions', 
+                        nargs='*',
+                        metavar = 'regionId',
+                        help = "Optinal list of regions to process. "
+                                "Defaults to all regions. Will also accept 'all' "
+                        )
+                        
+    parser.add_argument('-t','--type',        
+                        action='store', 
+                        default='all', 
+                        dest = 'imageType',
+                        help='image type (P,M,A,all)')
+                               
+    parser.add_argument('-c', '--channel', 
+                        action='store', 
+                        default=None, 
+                        type = int,
+                        dest = 'channel',
+                        help='Channel')
+    
+    parser.add_argument('--dry_run', 
+                        action='store_true', 
+                        default=False, 
+                        help='')
+    
+    
     # === build composites === FIXME: One at a time    
     parser = subparsers.add_parser('composites', 
                     help='Create composite images of target masks' )
