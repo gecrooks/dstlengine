@@ -145,30 +145,20 @@ def align( datadir,
         imageTypes = [imageType,]
  
  
-    progress('done')
- 
-    for region in regions:
-        progress('    ' + region)
-        
+    for region in regions:                
         dataset = datafile[region]
                 
-        for itype in imageTypes : 
-            if channel is not None :
-                channels = [channel,]
-            else :
-                channels = range(0,imageChannels[itype])
+        for itype in imageTypes:       
+            img = _align_region(datadir, region, itype, dry_run)
 
-            for chan in channels :
-                img = _align_region(datadir, region, itype, chan, dry_run)
-                progress()
-                
-        progress('done')
 
     datafile.close()
     progress('done')
 
-def _align_region(datadir, region, itype, chan, dry_run):
+def _align_region(datadir, region, itype, dry_run):
     """ """
+    
+    progress('    registering {} {}'.format(region, itype) )
     
     datafile = h5py.File( getpath('data', datadir=datadir), 'r+')
     # grab dataset for specific region
@@ -178,11 +168,13 @@ def _align_region(datadir, region, itype, chan, dry_run):
     start = region_height //2 - window_size //2
     end = start + window_size
     
-    f1 = feature_loc['3'][0]
-    f2 = feature_loc[itype][chan]
     
-    img1 = dataset[f1, start:end, start:end].astype(np.float32)
-    img2 = dataset[f2, start:end, start:end].astype(np.float32)
+    channel_blocks ={"3": (1,4), "A": (12,20), "M": (4,12), "P":(20,21) }
+    chan_start, chan_end = channel_blocks[itype]
+    
+    img_3 = dataset[1:4, start:end, start:end].astype(np.float32).mean(axis=0)
+    img_avg = dataset[chan_start:chan_end, start:end, start:end].astype(np.float32).mean(axis=0)
+    
     
     warp_mode = cv2.MOTION_TRANSLATION
     #warp_mode = cv2.MOTION_AFFINE
@@ -190,28 +182,26 @@ def _align_region(datadir, region, itype, chan, dry_run):
     
     try:
         criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 1000,  1e-5)
-        (cc, warp_matrix) = cv2.findTransformECC (img1, img2, warp_matrix, warp_mode, criteria)
+        (cc, warp_matrix) = cv2.findTransformECC (img_3, img_avg, warp_matrix, warp_mode, criteria)
     except cv2.error:
-	print('findTransformEEC Failed to converge: {}_5x5_{}_{}'.format(region, itype, chan) )    
+        print('findTransformEEC Failed to converge: {}_5x5_{}'.format(region, itype) )    
         return
-
-
-
-
-    print("register {} {}".format(itype, chan))
-    print("cc:{}".format(cc))
-    print(warp_matrix)
     
-    img1 = dataset[f1, :, :].astype(np.float32)
-    img2 = dataset[f2, :, :].astype(np.float32)
-    img3 = cv2.warpAffine(img2, warp_matrix, (img1.shape[1], img1.shape[0]), 
-                          flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
-    
-    if not dry_run:
-        progress('saving aligned image')
 
-        dataset[f2, :, :] = img3.astype(np.uint8)
- 
+    progress("cc: {:.2f} warp_matrix:".format(cc))
+    progress("".join(str(warp_matrix).split("\n")))
+    
+    for chan in range(chan_start,chan_end):
+        img2 = dataset[chan, :, :].astype(np.float32)
+        img3 = cv2.warpAffine(img2, warp_matrix, (img2.shape[1], img2.shape[0]), 
+                              flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+
+        if not dry_run:
+            dataset[chan, :, :] = img3.astype(np.uint8)
+            
+        progress()
+     
+    progress("done")
     
     
 
@@ -252,7 +242,7 @@ def build_images(datadir, imageIds, scale=None, composite=False) :
                 img.save(fn)  
                 
                 progress('done')
-          
+
 region_scale_default = 0.2
 image_scale_default = 1.0
 
@@ -378,32 +368,33 @@ def polygons_to_composite(class_polygons, xmax, ymin, width, height, filename, o
 
 
 def polygons_to_mask(multipolygon, xmax, ymin, width, height, filename=None) :
-     width /= float(dpi)
-     height /= float(dpi)    
+    """convert polygon coordinates to masked areas on an image  """
+    width /= float(dpi)
+    height /= float(dpi)    
 
-     fig = plt.figure(figsize=(width,height), frameon=False)
-     axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
-     axes.set_axis_off()         
-     fig.add_axes(axes)  
-     for polygon in multipolygon:
-         patch = PolygonPatch(polygon,
+    fig = plt.figure(figsize=(width,height), frameon=False)
+    axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
+    axes.set_axis_off()         
+    fig.add_axes(axes)  
+    for polygon in multipolygon:
+        patch = PolygonPatch(polygon,
                              color='#000000',
                              lw=0,               # linewidth
                              antialiased = True)
-         axes.add_patch(patch)
-     axes.set_xlim(0, xmax)
-     axes.set_ylim(ymin, 0)
-     axes.set_aspect(1)
-     plt.axis('off')
+        axes.add_patch(patch)
+    axes.set_xlim(0, xmax)
+    axes.set_ylim(ymin, 0)
+    axes.set_aspect(1)
+    plt.axis('off')
     
-     if filename is None :
-         filename = tempfile.NamedTemporaryFile(suffix='.png')
-     plt.savefig(filename, pad_inches=0, dpi=dpi, transparent=False)
-     plt.clf()
-     plt.close()
-     a = np.asarray(Image.open(filename))
-     a = (1.- a[:,:,0]/255.)  # convert from B&W to zeros and ones.
-     return a    
+    if filename is None :
+        filename = tempfile.NamedTemporaryFile(suffix='.png')
+    plt.savefig(filename, pad_inches=0, dpi=dpi, transparent=False)
+    plt.clf()
+    plt.close()
+    a = np.asarray(Image.open(filename))
+    a = (1.- a[:,:,0]/255.)  # convert from B&W to zeros and ones.
+    return a    
 
 
 
