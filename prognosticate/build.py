@@ -1,7 +1,7 @@
 #!/usr/bin/env python
     
 from core_dstl import *
-from core_dstl import __version__, __description__, _datadir, _sourcedir
+from core_dstl import __version__, __description__, _DATADIR, _SOURCEDIR
 
 
 # ----------   Command Line Interface ----------    
@@ -20,7 +20,6 @@ def _cli():
     datadir = opts.pop('datadir')
     sourcedir = opts.pop('sourcedir')
     verbose = not opts.pop('quite')
-
     
     with Dstl(datadir=datadir, sourcedir=sourcedir, verbose=verbose) as dstl:
         func = getattr(dstl, funcname)
@@ -48,14 +47,14 @@ def _arg_parser():
     main_parser.add_argument('-d', '--data', 
                           action='store', 
                           dest = 'datadir',
-                          default = _datadir,
+                          default = _DATADIR,
                           metavar = 'PATH',
                           help='Location to store and process data')
  
     main_parser.add_argument('-s', '--source', 
                        action='store', 
                        dest = 'sourcedir',
-                       default = _sourcedir,
+                       default = _SOURCEDIR,
                        metavar = 'PATH',
                        help='Location of input data')
  
@@ -72,19 +71,21 @@ def _arg_parser():
                help='Build main data structures (data, alignment, targets, composites)')         
     parser.set_defaults(funcname='build')
    
+    parser.add_argument('regions',
+                        nargs='*',
+                        metavar = 'regionId',
+                        help = "Optinal list of regions to process. Default is all regions.")
    
 
     # === build data ===
     parser = subparsers.add_parser('data', 
-                    help='Process raw dstl data into a 20 band 5km x 5km array for each of the 18 regions.') 
-                       
+                    help='Process raw dstl data into a 20 band 5km x 5km array for each of the 18 regions.')                    
     parser.set_defaults(funcname ='build_data')
     
     parser.add_argument('regions',
                         nargs='*',
                         metavar = 'regionId',
-                        help = "Optinal list of regions to process. "
-                                "Defaults to all regions. Will also accept 'all' and 'train'")
+                        help = "Optinal list of regions to process. Default is all regions.")
 
     parser.add_argument('-t','--type',
                         action='store',
@@ -96,13 +97,12 @@ def _arg_parser():
     # === register images ===
     parser = subparsers.add_parser('alignment',
                     help='Register A, M, and P bands to 3-band image')
-    parser.set_defaults(funcname='build_register')
+    parser.set_defaults(funcname='build_alignment')
     
     parser.add_argument('regions',
                         nargs='*',
                         metavar = 'regionId',
-                        help = "Optional list of regions to process. "
-                                "Defaults to all regions. Will also accept 'all' ")
+                        help = "Optinal list of regions to process. Default is all regions.")
                         
     parser.add_argument('-t','--type',
                         action='store',
@@ -121,26 +121,21 @@ def _arg_parser():
                     help='Process raw dstl data to create target data')
     parser.set_defaults(funcname='build_targets')
 
-    parser.add_argument(
-        'regions',
-        nargs='*',
-        metavar = 'regionId',
-        help = "Optional list of regions to process. "
-              "Defaults to all regions. Will also accept 'all' ")
-              
+    parser.add_argument('regions',
+                        nargs='*',
+                        metavar = 'regionId',
+                        help = "Optinal list of regions to process. Default is all regions.")              
 
     # === build composites ===
     parser = subparsers.add_parser('composites',
                     help='Create composite images of target masks')
     parser.set_defaults(funcname='build_composites')
     
-    parser.add_argument(
-        'regions',
-        nargs='*',
-        metavar = 'regionId',
-        help = "Optional list of regions to process. "
-              "Defaults to all regions. Will also accept 'all' ")
-    
+    parser.add_argument('regions',
+                        nargs='*',
+                        metavar = 'regionId',
+                        help = "Optinal list of regions to process. Default is all regions.")
+                            
     parser.add_argument(
         '--fill',
         dest = 'outline',
@@ -148,31 +143,7 @@ def _arg_parser():
         default=True,
         help='Filled masks (rather than outlines) ')  
  
-   
-    # === create images ===
-    parser = subparsers.add_parser('view',
-         help='Convert region data to viewable graphics in png format',
-         )
-    parser.set_defaults(funcname='view')
-
-    parser.add_argument(
-        'imageIds',
-        nargs='+',
-        metavar = 'imageIds',
-        help = "Optinal list of regions to process. ")
-
-    parser.add_argument(
-        '--scale', 
-        action='store', 
-        type=float,
-        help='Rescale image. (Default is 0.2 for regions, 1.0 for subregions) ')
-                            
-    parser.add_argument(
-        '--composite', 
-        action='store_true', 
-        default=False, 
-        help='')
-    
+ 
  
     return main_parser
     # End construction of argument parser

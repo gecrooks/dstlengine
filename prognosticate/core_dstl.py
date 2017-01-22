@@ -77,8 +77,11 @@ Run the unit tests:
 
 == Example command line usage ==
 
-Build main data structures. (This will take a few hours, and use 70+ gigabytes of disk space)
+Build main data structures. (This will take a few hours, and use 100+ gigabytes of disk space)
     ./build all
+
+Alternatively, build one region at a time
+    ./build all 6100
 
 Create PNG image of a 5km x 5km region, panchromatic band 
     ./build view 6100_5x5_P_0
@@ -133,7 +136,6 @@ class_loc = {'C': (-1 , 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)}
 
 # Adapted from @amanbh
 class_shortname = {
-    0 : 'Background',
     1 : 'Building',
     2 : 'Structure',
     3 : 'Road',
@@ -472,50 +474,50 @@ def wkt_polygons(data, imageId) :
 # ================ DSTL data ====================
 
 # Default sourcedir
-_sourcedir = os.path.join('..','input')
+_SOURCEDIR = os.path.join('..','input')
 
 # Default output directory
-_datadir = 'dstl.dat'
+_DATADIR = os.path.join('..','dstl.dat')
 
 
 
 # Either "gzip" (moderate speed, good compression), 'lzf' (very fast, moderate compression), or None
-_hdf5_compression = 'gzip'
+_HDF5_COMPRESSION = 'gzip'
 
 # Chunksize for hdf data. True for autochunking
-_hdf5_chunks = True 
+_HDF5_CHUNKS = True 
 
 # Default verbosity
-_verbose = True
+_VERBOSE = True
 
 # used when estimating image effective dynamic range
-_low_percent=2
-_high_percent=98
+_LOW_PERCENT=2
+_HIGH_PERCENT=98
 
 # default dots per inch when creating images. 
-_dpi = 256   
+_DPI = 256   
 
 # Default scaling for generating images of entire regions
-_region_scale = 0.2
+_REGION_SCALE = 0.2
 
 # Default scaling used when generating images of subregions
-_subregion_scale = 1.0
+_SUBREGION_SCALE = 1.0
 
 # Image resampling method when resizing: Image.BICUBIC or Image.LANCZOS
-_resample = Image.BICUBIC
+_RESAMPLE = Image.BICUBIC
 
 # Interpolation method when resizing with cv2: cv2.INTER_CUBIC or cv2.INTER_LANCZOS4
-_interpolation = cv2.INTER_CUBIC          
+_INTERPOLATION = cv2.INTER_CUBIC          
 
 # Mode used to find alignments between images
 # cv2.MOTION_TRANSLATION    -- faster and seems to be sufficent for the job
 # cv2.MOTION_AFFINE
-_warp_mode = cv2.MOTION_TRANSLATION
+_WARP_MODE = cv2.MOTION_TRANSLATION
 
 
 
 # Paths to various input and outfiles
-_paths = {
+_PATHS = {
     # source files
     'train_wkt'     : '{sourcedir}{sep}train_wkt_v4.csv',
     'grid_sizes'    : '{sourcedir}{sep}grid_sizes.csv',
@@ -537,13 +539,14 @@ _paths = {
 
 class Dstl(object):
     """Access and analysis of the dstl dataset.""" 
-    def __init__(self, sourcedir=_sourcedir, datadir=_datadir, verbose=_verbose):
+    def __init__(self, sourcedir=_SOURCEDIR, datadir=_DATADIR, verbose=_VERBOSE):
         self.sourcedir = sourcedir
         self.datadir = datadir
         self.verbose = verbose
         
         self._datafile = None
         self._wkt_data = None
+
 
     # Define __enter__ and __exit__ so can use 
     # with Dstl(...) as dstl:
@@ -557,12 +560,11 @@ class Dstl(object):
         self.close()
         
       
-    def open(self):        
-        if self._datafile is None :
-            fn = self.path('data')
-            if not os.path.exists(fn): self._initilize()
-            # Open hdf5 file for read & write.  
-            self._datafile = h5py.File(fn, 'r+', libver='latest')
+    def open(self):  
+        dfpath = self.path('data')
+        if not os.path.exists(dfpath): 
+            self._initialize()
+        self._datafile = h5py.File(dfpath, 'r+') # open for read/write 
         return self._datafile
              
     def close(self) :
@@ -573,23 +575,13 @@ class Dstl(object):
     
     def data(self, region) :
         datafile  = self.open()
-        datagroup = datafile.require_group('data') 
-        dataset   = datagroup.require_dataset(region, 
-                           (region_height, region_width, band_nb), 
-                           dtype = band_dtype, 
-                           chunks = _hdf5_chunks,
-                           compression = _hdf5_compression,)
-        return dataset
+        datagroup = datafile.require_group('data')  # FIXME
+        return datagroup[region]
     
     def targets(self, region) :
         datafile  = self.open()
-        datagroup = datafile.require_group('targets') 
-        dataset   = datagroup.require_dataset(region, 
-                    (region_height, region_width, class_nb), 
-                    maxshape=(region_height, region_width, None),
-                    dtype = class_dtype, 
-                    chunks = _hdf5_chunks,
-                    compression = _hdf5_compression,)
+        datagroup = datafile.require_group('targets')   # FIXME
+        dataset    = datagroup[region]
         return dataset
         
     
@@ -602,7 +594,7 @@ class Dstl(object):
         kwargs['sep'] = os.sep
         kwargs['sourcedir'] = self.sourcedir
         kwargs['datadir'] = self.datadir
-        path = _paths[name]
+        path = _PATHS[name]
         path = path.format(**kwargs)
         return path
 
@@ -704,7 +696,7 @@ class Dstl(object):
     
  
     def _initialize(self):
-        self._progress('Initilizing data structures...', end='\n')   
+        self._progress('Initializing data structures...', end='\n')   
         
         if not os.path.exists(self.datadir): os.makedirs(self.datadir)
             
@@ -716,8 +708,8 @@ class Dstl(object):
             dataset   = datagroup.require_dataset(region, 
                            (region_height, region_width, band_nb), 
                            dtype = band_dtype, 
-                           chunks = _hdf5_chunks,
-                           compression = _hdf5_compression,)
+                           chunks = _HDF5_CHUNKS,
+                           compression = _HDF5_COMPRESSION,)
    
         datagroup = datafile.require_group('targets') 
         for region in self.regionIds:
@@ -725,25 +717,24 @@ class Dstl(object):
                         (region_height, region_width, class_nb), 
                         maxshape=(region_height, region_width, None),
                         dtype = class_dtype, 
-                        chunks = _hdf5_chunks,
-                        compression = _hdf5_compression,)
+                        chunks = _HDF5_CHUNKS,
+                        compression = _HDF5_COMPRESSION,)
         
         self._progress('done')   
         
-    def build(self):
+    def build(self, regions = None):
         """Build everything. (build_data, build_alignment, build_targets, build_composites)"""
-        self.build_data()
-        self.build_alignment()
-        self.build_targets()
-        self.build_composites()
+        self.build_data(regions)
+        self.build_alignment(regions)
+        self.build_targets(regions)
+        self.build_composites(regions)
      
         
     
     def build_data(self, regions = None, imageType = None) :   
         self._progress('Building data structures...', end='\n')   
         
-        if not regions or regions == ['all'] :
-            regions = self.regionIds  
+        if not regions : regions = self.regionIds  
         
         if imageType is None or imageType == 'all' :
             itypes = band_types  
@@ -777,7 +768,7 @@ class Dstl(object):
                                  
                         # Rescale all images to standard image size
                         img = data.astype(np.float32)  
-                        img = cv2.resize(img, (std_width, std_height),  interpolation= _interpolation)   
+                        img = cv2.resize(img, (std_width, std_height),  interpolation= _INTERPOLATION)   
                         if itype == 'P' : img = np.expand_dims(img, axis=-1) # Put back last axis
                         img = np.asarray(img, dtype = band_dtype)
  
@@ -794,14 +785,15 @@ class Dstl(object):
     # ---------- End Dstl build_data ----------
  
  
-    def build_register( self,
+    def build_alignment( self,
                regions = None,
                imageType = None,
                dry_run = False,
-               ) :      
+               ) :    
+        """Register A, M and P images to 3-band images"""
         self._progress('Re-registering images...', end='\n') 
         
-        if not regions or regions == ['all']:
+        if not regions :
             regions = self.regionIds
 
         if not imageType or imageType == 'all': 
@@ -824,13 +816,11 @@ class Dstl(object):
                 bands = band_slice[itype]
                 img_avg = dataset[start:stop, start:stop, bands].astype(np.float32).mean(axis=-1)
                 
-   
-                warp_mode = _warp_mode
                 warp_matrix = np.eye(2,3, dtype=np.float32) # 'eye' is I, identity matrix
    
                 try:
                     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 1000,  1e-5)
-                    (cc, warp_matrix) = cv2.findTransformECC (img_3, img_avg, warp_matrix, warp_mode, criteria)
+                    (cc, warp_matrix) = cv2.findTransformECC (img_3, img_avg, warp_matrix, _WARP_MODE, criteria)
                 except cv2.error:
                     print('findTransformEEC Failed to converge: {}_5x5_{}'.format(region, itype))    
                     # if it fails, let it go.
@@ -840,9 +830,9 @@ class Dstl(object):
                 self._progress("".join(str(warp_matrix).split("\n")))
 
                 if not dry_run:
+                    img2 = dataset[:, :, bands ]
                     if img2.shape[2]==1 : # fix for warpAffine dropping last axis when length 1
                         bands = bands.start    
-                    img2 = dataset[:, :, bands ] 
                     dataset[:, :, bands]  = cv2.warpAffine(
                                                 img2,
                                                 warp_matrix,
@@ -852,7 +842,7 @@ class Dstl(object):
                 self._progress('done')
         self._progress('done') 
         
-    # ---------- End Dstl build_register ----------
+    # ---------- End Dstl build_alignment ----------
     
     
     
@@ -865,7 +855,7 @@ class Dstl(object):
         wkt= load_wkt( self.path('train_wkt'))
         self._progress('done')
     
-        if not regions or regions == ['all']: regions = self.regionIds
+        if not regions: regions = self.regionIds
     
         for region in regions:
             for iid in self.train_imageIds :
@@ -895,7 +885,7 @@ class Dstl(object):
     def build_composites(self, regions=None, outline = True):
         self._progress('Building target composites...', end ='\n    ')
     
-        if not regions or regions == ['all']: regions = self.regionIds
+        if not regions: regions = self.regionIds
     
         for iid in self.train_imageIds :
             reg = parse_viewId(iis)[0]
@@ -961,21 +951,18 @@ class Dstl(object):
             rcol, rrow = image_to_region_coords( (0, 0), (0, 0))
             rcol_stop = rcol + 5*std_width
             rrow_stop = rrow + 5*std_height
-            if not scale : scale = _region_scale
+            if not scale : scale = _REGION_SCALE
         else :
             # Single 1km by 1km view
             rcol, rrow = image_to_region_coords( (0, 0), (reg_col, reg_row))
             rcol_stop = rcol + std_width
             rrow_stop = rrow + std_height
             
-            if not scale : scale = _subregion_scale
+            if not scale : scale = _SUBREGION_SCALE
   
   
         data = dataset[rrow : rrow_stop, rcol : rcol_stop , loc]
-        
-        #print(data.max(), data.min())
-        low, high = np.percentile(data, (_low_percent, _high_percent))  
-        #print( "low high", low, high)
+        low, high = np.percentile(data, (_LOW_PERCENT, _HIGH_PERCENT))  
 
         data = _stretch_to_uint8(data, low, high)
         img = Image.fromarray(data) 
@@ -991,7 +978,7 @@ class Dstl(object):
             width, height = img.size
             width = int(round( width*scale))
             height = int(round( height* scale))       
-            img = img.resize( ( width, height) , resample = _resample)
+            img = img.resize( ( width, height) , resample = _RESAMPLE)
         return img
     
 
@@ -1000,8 +987,8 @@ class Dstl(object):
 
 def polygons_to_composite(class_polygons, xmax, ymin, width, height, filename, outline=True) :
      """ If outline is true, create transparent outline of classes suitable for layering over other images."""
-     width /= 1.*_dpi
-     height /= 1.*_dpi
+     width /= 1.*_DPI
+     height /= 1.*_DPI
      
      fig = plt.figure(figsize=(width,height), frameon=False)
      axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
@@ -1032,33 +1019,35 @@ def polygons_to_composite(class_polygons, xmax, ymin, width, height, filename, o
      axes.set_aspect(1)
      plt.axis('off')
      
-     plt.savefig(filename, pad_inches=0, dpi=_dpi, transparent=transparent)
+     plt.savefig(filename, pad_inches=0, dpi=_DPI, transparent=transparent)
      plt.clf()
      plt.close()    
 
 
 
 def polygons_to_mask(multipolygon, xmax, ymin, width, height, filename=None) :
-     width /= 1.*_dpi
-     height /= 1.* _dpi    
-     fig = plt.figure(figsize=(width,height), frameon=False)
+     img_width = 1.* width / _DPI       # In inches (!)
+     img_height = 1.* height / _DPI    
+     fig = plt.figure(figsize=(img_width,img_height), frameon=False)
      axes = plt.Axes(fig, [0., 0, 1, 1]) # One axis, many axes
      axes.set_axis_off()         
      fig.add_axes(axes)  
+              
      for polygon in multipolygon:
          patch = PolygonPatch(polygon,
                              color='#000000',
                              lw=0,               # linewidth
                              antialiased = True)
          axes.add_patch(patch)
-     axes.set_xlim(0, xmax)
-     axes.set_ylim(ymin, 0)
+     axes.set_xlim(0, xmax * width/(width-1))
+     axes.set_ylim(ymin * height/(height-1) , 0)
+     
      axes.set_aspect(1)
      plt.axis('off')
     
      if filename is None :
          filename = tempfile.NamedTemporaryFile(suffix='.png')
-     plt.savefig(filename, pad_inches=0, dpi=_dpi, transparent=False)
+     plt.savefig(filename, pad_inches=0, dpi=_DPI, transparent=False)
      plt.clf()
      plt.close()
      a = np.asarray(Image.open(filename))
@@ -1128,7 +1117,7 @@ def _rounddown(x, size) : return _roundup(x, size) - size
 
 
 # Print progress reports to stdout if verbosity is True.
-def _progress(string = None, end = ' ', verbose=_verbose) :
+def _progress(string = None, end = ' ', verbose=_VERBOSE):
     if verbose :
         if string == 'done': 
             print(' done')
