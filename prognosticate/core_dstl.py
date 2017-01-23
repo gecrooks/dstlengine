@@ -77,17 +77,17 @@ Run the unit tests:
 
 == Example command line usage ==
 
-Build main data structures. (This will take a few hours, and use 100+ gigabytes of disk space)
-    ./build all
+Build main data structures. (This will take a few hours, and use 90+ gigabytes of disk space)
+    ./build.py all
 
 Alternatively, build one region at a time
-    ./build all 6100
+    ./build.py all 6100
 
 Create PNG image of a 5km x 5km region, panchromatic band 
-    ./build view 6100_5x5_P_0
+    ./image.py view 6100_5x5_P_0
 
 View training subregion with overlaid target polygons
-    ./build view 6100_1_3_P_0 --composite
+    ./image.py 6100_1_3_P_0 --composite
 
 API help
     python -c 'import core_dstl; help(core_dstl)'
@@ -124,9 +124,6 @@ def package_versions():
 # ================ DSTL basic information ====================
 
 class_nb = 10 # 1-10 
-
-# Datatype used to store class masks
-class_dtype = np.uint8
 
 class_types = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -177,26 +174,6 @@ class_zorder = {
     10: 10,
         }
 
-# Filenames used for geojson files
-filename_to_classType = {
-    '001_MM_L2_LARGE_BUILDING':1,
-    '001_MM_L3_RESIDENTIAL_BUILDING':1,
-    '001_MM_L3_NON_RESIDENTIAL_BUILDING':1,
-    '001_MM_L5_MISC_SMALL_STRUCTURE':2,
-    '002_TR_L3_GOOD_ROADS':3,
-    '002_TR_L4_POOR_DIRT_CART_TRACK':4,
-    '002_TR_L6_FOOTPATH_TRAIL':4,
-    '006_VEG_L2_WOODLAND':5,
-    '006_VEG_L3_HEDGEROWS':5,
-    '006_VEG_L5_GROUP_TREES':5,
-    '006_VEG_L5_STANDALONE_TREES':5,
-    '007_AGR_L2_CONTOUR_PLOUGHING_CROPLAND':6,
-    '007_AGR_L6_ROW_CROP':6,
-    '008_WTR_L3_WATERWAY':7,
-    '008_WTR_L2_STANDING_WATER':8,
-    '003_VH_L4_LARGE_VEHICLE':9,
-    '003_VH_L5_SMALL_VEHICLE':10,
-    '003_VH_L6_MOTORBIKE':10}
 
 
 
@@ -247,10 +224,6 @@ band_nb = 20
 # number of bands in each image type.
 nb_channels = {'3':3, 'A':8, 'M':8, 'P':1}
 
-# Datatype used to store band data
-band_dtype = np.uint16
-
-
 # Images cover 1km x 1km subregions, and come in 4 types.
 band_types = ('3', 'A', 'M', 'P')
 
@@ -278,6 +251,7 @@ feature_names = {
     }
 
 
+
 # ================ DSTL Prognostication engine basic information ====================
 
 
@@ -285,8 +259,12 @@ feature_names = {
 # The '3' band images are always almost this size, within a few pixels,
 # except the right and bottom boundary images (of a 5x5 region), 
 # which can be cropped smaller.
+# So we pad to 0_0 size of same region, then scale to standard size
 std_height = 3348
 std_width = 3396
+
+max_hegiht = 3350
+max_width = 3403
 
 # Minimum border of zero data around valid data in a region
 region_border = 256
@@ -297,15 +275,10 @@ region_border = 256
 region_width = 5 * std_width + 2 * region_border
 region_height = 5 * std_height + 2 * region_border
 
-
+# fixme
 # The resolution used for the input wkt polygons 
 grid_resolution = 1./1000000 
 
-
-# Canonical grid sizes, xmax and ymin, assuming standard width and height
-# TODO: check
-std_xmax =   2.7 * grid_resolution * std_width
-std_ymin = - 2.7 * grid_resolution * std_height
 
 
 # ================ DSTL routines ====================
@@ -336,7 +309,7 @@ std_ymin = - 2.7 * grid_resolution * std_height
 # and this alternative correction does make sense. Suppose the image is 100 pixels wide, and xmax= 1.0
 # Then the last pixel is icol=99 which should correspond to x=1.0
 
-def grid_to_image_coords(coords, image_size = (std_width, std_height), grid_size = (std_xmax, std_ymin)):
+def grid_to_image_coords(coords, grid_size, image_size = (std_width, std_height)):
     x, y = coords
     W, H = image_size
     xmax, ymin = grid_size  
@@ -347,7 +320,7 @@ def grid_to_image_coords(coords, image_size = (std_width, std_height), grid_size
     return col, row
     
     
-def image_to_grid_coords(coords, image_size = (std_width, std_height), grid_size = (std_xmax, std_ymin)):
+def image_to_grid_coords(coords, grid_size, image_size = (std_width, std_height) ):
     icol, irow = coords
     W, H = image_size
     xmax, ymin = grid_size
@@ -472,9 +445,12 @@ def wkt_polygons(data, imageId) :
 
 
 # ================ DSTL data ====================
+#FIXME: don't need to be private
 
 # Default sourcedir
 _SOURCEDIR = os.path.join('..','input')
+
+#FIXME: don't need to be private
 
 # Default output directory
 _DATADIR = os.path.join('..','dstl.dat')
@@ -515,8 +491,16 @@ _INTERPOLATION = cv2.INTER_CUBIC
 _WARP_MODE = cv2.MOTION_TRANSLATION
 
 
+# Datatype used to store band data
+# np.uint8 for compact storage, or np.uint16 to match source data
+band_dtype = np.uint8
 
-# Paths to various input and outfiles
+
+# Datatype used to store class masks
+class_dtype = np.uint8
+
+
+# Paths to various input and output files
 _PATHS = {
     # source files
     'train_wkt'     : '{sourcedir}{sep}train_wkt_v4.csv',
@@ -532,7 +516,8 @@ _PATHS = {
     
 }
 
-  
+
+
 
 
 
@@ -547,6 +532,10 @@ class Dstl(object):
         self._datafile = None
         self._wkt_data = None
 
+        # Dictionary mapping image type to dynamic range (low, high)
+        # These are defaults. Reload with dstl.load_dynamic_range
+        self.dynamic_range = {'3': (157, 765), 'A': (539, 7381), 'M': (203, 914), 'P': (265, 797)}
+        
 
     # Define __enter__ and __exit__ so can use 
     # with Dstl(...) as dstl:
@@ -690,6 +679,21 @@ class Dstl(object):
         return sorted(set( [iid[0:4] for iid in self.imageIds]))
     
 
+    # FIXME: docs. Test
+    def load_dynamic_range(self):
+        dynamic_range = {}
+        for itype in band_types : 
+                data = []
+                for iid in self.train_imageIds :
+                    img = self.load_image(iid, itype)
+                    data.append(img.flatten())
+                data = np.concatenate(data)
+                low, high = np.percentile(data, (_LOW_PERCENT, _HIGH_PERCENT) ) 
+                dynamic_range[itype] = (int(low), int(high) )
+        
+        self.dynamic_range = dynamic_range
+
+    
 
     
     # ---------- Dstl munge data ----------
@@ -740,13 +744,25 @@ class Dstl(object):
             itypes = band_types  
         else:
             itypes = [imageType,]
-                   
+                
+   
         for region in regions:
             dataset = self.data(region)
             
+            # Fill background with (near) average values
+            self._progress('    {} init'.format(region) )
+            for itype in itypes :
+                low, high =  self.dynamic_range[itype]
+                avg = (low + high)//2
+                bands  = band_slice[itype]
+                dataset[:,:,bands].fill(avg) 
+                self._progress()
+            self._progress('done')
+            
+            
             # Loop over all subregions in 5x5 region    
-            for reg_row in range(0,5):
-                for reg_col in range (0,5):
+            for reg_row in range(0,5): 
+                for reg_col in range (0,5): # FIXME 5 magic constant
                     iid = compose_viewId(region, reg_row, reg_col)              
 
                     self._progress('    '+iid)
@@ -754,8 +770,6 @@ class Dstl(object):
                         self._progress()
                         
                         data = self.load_image(iid, itype)
-
-                        #print("Build in ", data.min(), data.max(), data.shape, data.dtype) #FIXME
 
                         # If a right or bottom edge image, pad to size of _0_0 image
                         iid00 = compose_viewId(region, 0, 0)  
@@ -770,8 +784,11 @@ class Dstl(object):
                         img = data.astype(np.float32)  
                         img = cv2.resize(img, (std_width, std_height),  interpolation= _INTERPOLATION)   
                         if itype == 'P' : img = np.expand_dims(img, axis=-1) # Put back last axis
-                        img = np.asarray(img, dtype = band_dtype)
- 
+   
+                        # Stretch dynamic range
+                        low, high =  self.dynamic_range[itype]
+                        img = _stretch(img, low, high, dtype = band_dtype)
+  
                         # Save image data to correct location in region data
                         rcol, rrow = image_to_region_coords( (0,0), (reg_col, reg_row))
                         rcol_stop = rcol + std_width
@@ -779,8 +796,9 @@ class Dstl(object):
                         bands = band_slice[itype]
                         dataset[rrow : rrow_stop, rcol : rcol_stop, bands] = img  
                                               
-                    self._progress('done')    
-        self._progress('done')
+                    self._progress('done') # finished subregion
+               
+        self._progress('done')  # finished all regions
         
     # ---------- End Dstl build_data ----------
  
@@ -856,7 +874,8 @@ class Dstl(object):
         self._progress('done')
     
         if not regions: regions = self.regionIds
-    
+        gs = self.grid_sizes
+        
         for region in regions:
             for iid in self.train_imageIds :
                 reg, reg_row, reg_col = parse_viewId(iid)[0:3]
@@ -867,10 +886,12 @@ class Dstl(object):
                 self._progress()
                 
                 dataset = self.targets(region)
-            
+                xmax, ymin = gs[iid]
+                
                 for ct in class_types:
                     polygons = class_polygons[ct]
-                    mask = polygons_to_mask(polygons, std_xmax, std_ymin, std_width, std_height)       
+                    
+                    mask = polygons_to_mask(polygons, xmax, ymin, std_width, std_height)       
                     loc = class_loc['C'][ct] 
                     rcol, rrow = image_to_region_coords( (0,0), (reg_col, reg_row))
                     dataset[rrow:rrow+std_height, rcol:rcol+std_width, loc] = mask*255.
@@ -885,17 +906,22 @@ class Dstl(object):
     def build_composites(self, regions=None, outline = True):
         self._progress('Building target composites...', end ='\n    ')
     
-        if not regions: regions = self.regionIds
-    
+        regions = regions if regions else self.regionIds
+        #if not regions: regions = self.regionIds
+        gs = self.grid_sizes
+        
         for iid in self.train_imageIds :
-            reg = parse_viewId(iis)[0]
+            reg = parse_viewId(iid)[0]
             if reg not in regions: continue
+            self._progress('    '+iid)
             
-            self._progress('    ') ; self._progress(iid)
+            xmax, ymin = gs[iid]
             class_polygons = self.wkt_polygons(iid)
             fn = self.path('composite', imageId = iid)
-            polygons_to_composite(class_polygons, std_xmax, std_ymin, std_width, std_height, fn, outline)          
+            polygons_to_composite(class_polygons, xmax, ymin, std_width, std_height, fn, outline)          
+            
             self._progress('done')
+        
         self._progress('done')
 
 
@@ -961,10 +987,15 @@ class Dstl(object):
             if not scale : scale = _SUBREGION_SCALE
   
   
-        data = dataset[rrow : rrow_stop, rcol : rcol_stop , loc]
-        low, high = np.percentile(data, (_LOW_PERCENT, _HIGH_PERCENT))  
+        data = dataset[rrow : rrow_stop, rcol : rcol_stop, loc]
+        dmin = np.iinfo(data.dtype).min
+        dmax = np.iinfo(data.dtype).max
+        
+        data =  _stretch(data, dmin, dmax, dtype=np.uint8)
+        
+        #low, high = np.percentile(data, (_LOW_PERCENT, _HIGH_PERCENT)) #FIXME 
 
-        data = _stretch_to_uint8(data, low, high)
+        #data = _stretch_to_uint8(data, low, high)
         img = Image.fromarray(data) 
 
         if composite :
@@ -1042,7 +1073,7 @@ def polygons_to_mask(multipolygon, xmax, ymin, width, height, filename=None) :
      axes.set_xlim(0, xmax * width/(width-1))
      axes.set_ylim(ymin * height/(height-1) , 0)
      
-     axes.set_aspect(1)
+     #axes.set_aspect(1)
      plt.axis('off')
     
      if filename is None :
@@ -1057,7 +1088,7 @@ def polygons_to_mask(multipolygon, xmax, ymin, width, height, filename=None) :
 
 
 # Adapted from code by '@shawn'
-def mask_to_polygons(mask, xmax=std_xmax, ymin=std_ymin, threshold=0.4):
+def mask_to_polygons(mask, xmax, ymin, threshold=0.4):
      all_polygons=[]
     
      mask[mask >= threshold] = 1
@@ -1072,6 +1103,7 @@ def mask_to_polygons(mask, xmax=std_xmax, ymin=std_ymin, threshold=0.4):
      all_polygons = shapely.geometry.MultiPolygon(all_polygons)
     
      # simplify the geometry of the masks
+     # FIXME: this seems to be in wrong place. working in pixel coordinates here, but rounds anyways!?
      all_polygons = all_polygons.simplify(grid_resolution, preserve_topology=False)
        
      # Transform from pixel coordinates to grid coordinates
@@ -1109,6 +1141,8 @@ def polygon_jaccard(actual_polygons, predicted_polygons) :
 
 # ================ Utility routines ====================
 
+# FIXME: no reason to be private
+
 # Round up to next size
 def _roundup(x, size) : return ( (x+size-1) // size) * size
 
@@ -1117,6 +1151,8 @@ def _rounddown(x, size) : return _roundup(x, size) - size
 
 
 # Print progress reports to stdout if verbosity is True.
+# FIXME: move to dstl
+
 def _progress(string = None, end = ' ', verbose=_VERBOSE):
     if verbose :
         if string == 'done': 
@@ -1127,8 +1163,21 @@ def _progress(string = None, end = ' ', verbose=_VERBOSE):
             print('.', end='')
         sys.stdout.flush()
 
-    
 
+def _stretch(data, low, high, dtype = np.uint8):
+    """ Stretch the dynamic range of an array to range of dtype.
+    Values outside of [low, high] are clipped.
+    """
+    dmin = np.iinfo(dtype).min
+    dmax = np.iinfo(dtype).max
+
+    data = data.astype(float)
+    stretched = dmax* (data - low) / (high - low)    
+    stretched[stretched<dmin] = dmin
+    stretched[stretched>dmax] = dmax
+    return stretched.astype(dtype)   
+
+# FIXME Deprecated. Use _stretch
 def _stretch_to_uint8(data, low, high):
     """ Stretch the dynamic range of an array to 8 bit data [0,255]
     Numbers outside range (low, high) are clipped to [0,255]

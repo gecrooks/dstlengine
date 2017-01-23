@@ -2,10 +2,9 @@
 
 import unittest
 
-import coredstl
-from coredstl import *
-
-
+import core_dstl
+from core_dstl import *
+from core_dstl import _roundup, _rounddown, _stretch_to_uint8
 
 # --------------- unit tests ------------------  
   
@@ -16,25 +15,20 @@ class TestCoreDstl(unittest.TestCase):
         self.assertEqual(len(class_types), len(class_color))
         self.assertEqual(len(class_types), len(class_zorder))
 
-        self.assertEqual(len(class_types), len(set(filename_to_classType.values() )) )
-
-        ext = set(extended_classes)
-        for cls in filename_to_classType.keys():
-            self.assertIn(cls,ext)
-
+ 
     def test_feature_loc(self):
-        for itype in image_types : 
-            self.assertEqual( len( feature_loc[itype] ), nb_channels[itype] )
+        for itype in band_types : 
+            self.assertEqual( band_slice[itype].stop - band_slice[itype].start, nb_channels[itype] )
 
 
 
     def test_grid_to_image_coords(self) :
-        coords = grid_to_image_coords( (0.001, 0.001) )
-        grid = image_to_grid_coords( coords)
+        coords = grid_to_image_coords( (0.001, 0.001), (1.,12.))
+        grid = image_to_grid_coords( coords,  (1.,12.) )
         self.assertAlmostEqual( grid[0], 0.001 )
         self.assertAlmostEqual( grid[1], 0.001 )
 
-        (col, row) = grid_to_image_coords( image_to_grid_coords( (1000, 2000) ) )
+        (col, row) = grid_to_image_coords( image_to_grid_coords( (1000, 2000), (1.,12.) ),  (1.,12.) )
         self.assertAlmostEqual( col, 1000)
         self.assertAlmostEqual( row, 2000)
 
@@ -43,7 +37,7 @@ class TestCoreDstl(unittest.TestCase):
         self.assertAlmostEqual(row, 99.)
 
     def test_image_to_grid_coords(self):
-        (x,y) = image_to_grid_coords( grid_to_image_coords( (0.6, 0.4) )  )
+        (x,y) = image_to_grid_coords( grid_to_image_coords( (0.6, 0.4), (1.,12.) ), (1.,12.)  )
         self.assertAlmostEqual( x, 0.6)
         self.assertAlmostEqual( y, 0.4)
 
@@ -127,29 +121,29 @@ class TestDstl(unittest.TestCase):
 
     def test_wkt_polygons(self):
         dstl = Dstl()
-        fn = dstl.path('train_wkt')
-        wkt_polygons = load_wkt_polygons(fn, ['6010_1_2','6060_2_3'] )
-        assert( len(wkt_polygons['6060_2_3'])==10 )
-        assert( len(wkt_polygons['6010_1_2'][5])==1733) # trees
-        assert( wkt_polygons['6060_2_3'][2].is_valid)
+        wkt_polygons = dstl.wkt_polygons
+        assert( len(wkt_polygons('6060_2_3') )==10 )
+        assert( len(wkt_polygons('6010_1_2') [5])==1733) # trees
+        assert( wkt_polygons('6060_2_3')[2].is_valid)
  
  
     def test_load_image(self):
         dstl = Dstl()
         img = dstl.load_image('6010_1_2', '3')
-        self.assertEqual(img.shape, (3, 3349, 3396))
+        self.assertEqual(img.shape, (3349, 3396,3))
         img = dstl.load_image('6010_1_2', 'A')
-        self.assertEqual(img.shape, (8, 134, 136) )
+        self.assertEqual(img.shape, (134, 136,8) )
         img = dstl.load_image('6010_1_2', 'M')
-        self.assertEqual(img.shape, (8, 837, 849))
+        self.assertEqual(img.shape, (837, 849,8))
         img = dstl.load_image('6010_1_2', 'P')
-        self.assertEqual(img.shape, (1, 3348, 3396))
+        self.assertEqual(img.shape, (3348, 3396,1))
 
 
     def test_image_sizes(self):
         dstl = Dstl()
         width, height= dstl.image_size('6010_1_2')
-        self.assertAlmostEqual( - std_xmax/std_ymin, 1.* width/height, places=3)
+        xmax, ymin = dstl.grid_sizes['6010_1_2']
+        self.assertAlmostEqual( - xmax/ymin, 1.* width/height, places=3)
         
 
     def test_imageIds(self):
@@ -172,11 +166,6 @@ class TestDstl(unittest.TestCase):
         self.assertEqual(len(dstl.regionIds), 18)
 
 
-    def test_channel_range(self):
-        dstl = Dstl()
-        low, high = dstl.channel_range('3', 0)
-        self.assertEqual(low,124)
-        self.assertEqual(high,763)
 
 
 class TestPolygons(unittest.TestCase):
@@ -192,7 +181,7 @@ class TestPolygons(unittest.TestCase):
 
         # Test class_polygons_to_composite
         iid= '6010_1_2'
-        class_polygons = self.dstl.wkt_polygons[iid]
+        class_polygons = self.dstl.wkt_polygons(iid)
 
         fn = iid +'_composite_test.png'
         polygons_to_composite(class_polygons, xmax, ymin, width, height, fn, outline=False)
@@ -201,7 +190,7 @@ class TestPolygons(unittest.TestCase):
 
 
     def test_polygons_to_mask(self):
-        polygons =  self.dstl.wkt_polygons['6010_1_2'][4]
+        polygons =  self.dstl.wkt_polygons('6010_1_2')[4]
         assert(len(polygons) == 12)
         xmax, ymin = self.dstl.grid_sizes['6010_1_2']
         width, height = self.dstl.image_size('6010_1_2')
@@ -210,7 +199,7 @@ class TestPolygons(unittest.TestCase):
 
 
     def test_mask_to_polygons(self):
-        actual_polygons = self.dstl.wkt_polygons['6010_1_2'][4]
+        actual_polygons = self.dstl.wkt_polygons('6010_1_2')[4]
         assert(len(actual_polygons) == 12)
         xmax, ymin = self.dstl.grid_sizes['6010_1_2']
         width, height = self.dstl.image_size('6010_1_2')
@@ -218,11 +207,10 @@ class TestPolygons(unittest.TestCase):
         predicted_polygons = mask_to_polygons(mask, xmax, ymin)
         new_mask = polygons_to_mask(actual_polygons, xmax, ymin, width, height)
 
-
-    #def test_polygon_jaccard(self):
         jaccard, tp, fp, fn = polygon_jaccard(actual_polygons, predicted_polygons)
-        assert(jaccard>0.9)
         #print(jaccard, tp, fp, fn)
+        assert(jaccard>0.9)
+
 
 
 
