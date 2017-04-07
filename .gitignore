@@ -1,3 +1,11 @@
+# Don't import large binary files into GIT
+three_band/
+sixteen_band/
+input/
+output/
+junk/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
