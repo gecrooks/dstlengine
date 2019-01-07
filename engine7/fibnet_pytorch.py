@@ -55,81 +55,123 @@ import argparse
 import os
 import sys
 
-import keras
-from keras.models import *
-from keras.layers import *
-from keras.optimizers import *
+# import keras
+# from keras.models import *
+# from keras.layers import *
+# from keras.optimizers import *
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+
 
 
 __description__ = 'Fully convolutional Fibonacci neural network for image segmentation.'
 __author__ = 'Gavin E. Crooks'
 
 
-def fibnet(depth, features, tilesize, input_features=None, output_features=None, border_mode = 'valid', shortcut = True) :
+# define the CNN architecture
+class Fibnet(nn.Module):
     """Construct a fully convolutional Fibonacci neural network suitable for image segmentation.
-    
+                
     Keyword arguments:
-     depth -- integer number of convolutional layers (between 6 and 28)
-     features -- integer features per layer
-     tilesize -- integer side length of output tiles
-     input_features -- integer features of input layer (default: features)
-     output_features -- integer features of output layer (default: features)
-     border_mode -- 'valid' (default) or 'same'. If 'valid' the input layer is padded with border so that output layer stays same size.
-     shortcut -- add shortcuts through network
+        depth (int): number of convolutional layers (between 6 and 28)
+        features (int): features per layer
+        tilesize (int): side length of output tiles
+        input_features (int): features of input layer (default: features)
+        output_features (int): features of output layer (default: features)
+        border_mode (str): 'valid' (default) or 'same'. If 'valid' the input layer is padded with border so that output layer stays same size.
+        shortcut (bool): add shortcuts through network
     """
-    assert depth >= 6
-    assert depth <= 28
-    assert border_mode == 'valid' or border_mode == 'same'
 
-    input_features = features if input_features is None else input_features
-    output_features = features if output_features is None else output_features
+    def __init__(self, arg):
+        super(Fibnet, self).__init__()
+        
+        self.fibonacci = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]   
+        self.dilation_rates = []
+        self.dilation_rates.extend(fibonacci[0:depth//2])
+        self.dilation_rates.extend(fibonacci[0:(depth+1)//2][::-1])
 
-      
-    fibonacci = [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233]   
-    dilation_rates = []
-    dilation_rates.extend(fibonacci[0:depth//2])
-    dilation_rates.extend(fibonacci[0:(depth+1)//2][::-1])
-    
-    if border_mode == 'valid' :
-        tileborder = sum(rates) 
-    else :
-        tileborder = 0
+        self.depth = 0
+        self.features = None
+        self.tilesize = None
+        self.input_features = None
+        self.output_features =None
+        self.border_mode = 'valid'
+        self.shortcut = True
 
-    input_shape=(input_features, tilesize + 2*tileborder, tilesize + 2*tileborder)
- 
-    conv = [None] * depth
- 
-    inputs = Input(input_shape)
+        self.optimizer = None
+        self.loss = nn.CrossEntropyLoss()
+        self.scheduler = None
+        self.input_shape= None
+        self.outputs = None
 
-    conv[0] = Convolution2D(features, 1, 1, activation='relu', border_mode='same')(inputs)
-    
-    conv[1] = Convolution2D(features, 3, 3, activation='relu', border_mode='same')(conv[0]) 
-    conv[2] = Convolution2D(features, 3, 3, activation='relu', border_mode='same')(conv[1])
-    
-    for d in range(3, (depth+2)//2) :
-        rate = dilation_rates[d]
-        conv[d] = AtrousConvolution2D(features, 3, 3, activation='relu', border_mode='same', atrous_rate=(rate,rate))(conv[d-1]) 
+        assert self.depth >= 6
+        assert self.depth <= 28
+        assert self.border_mode == 'valid' or border_mode == 'same'
 
-    for d in range( (depth+2)//2, depth-3) :
-        rate = dilation_rates[d]
-        if shortcut :
-            source = merge([conv[d-1], conv[depth-d-1]], mode='concat', concat_axis=1)
-        else :
-            source = conv[d-1]
-        conv[d] = AtrousConvolution2D(features, 3, 3, activation='relu', border_mode='same', atrous_rate=(rate,rate))(source) 
-    
-    conv[depth-3] = Convolution2D(features, 3, 3, activation='relu', border_mode='same')(conv[depth-4])
-    conv[depth-2] = Convolution2D(features, 3, 3, activation='relu', border_mode='same')(conv[depth-3])
- 
-    conv[depth-1] = Convolution2D(output_features, 1, 1, activation='sigmoid', border_mode='same')(conv[depth-2])
 
-    outputs = conv[depth-1]
-    if border_mode == 'valid' :
-        outputs =  Cropping2D(cropping=((53, 53), (53, 53)))(outputs)
+        conv = [None] * depth
+     
+        # TODO find equivalent pytorch function
+        inputs = Input(input_shape)
 
-    model = Model(input=inputs, output=outputs)
-    model.compile(optimizer=Adam(), loss='binary_crossentropy')
-    return model
+        
+        if border_mode == 'valid' :
+            tileborder = sum(rates) 
+        else:
+            tileborder = 0
+
+        input_shape=(self.input_features, self.tilesize + 2*tileborder, self.tilesize + 2*tileborder)
+
+        self.input_features = self.features if self.input_features is None else self.input_features
+        self.output_features = self.features if self.output_features is None else self.output_features
+
+       
+
+        self.conv0 = nn.Conv2d(features, 1, 1, padding=1)
+        self.conv1 = nn.Conv2d(features, 1, 1, padding='same')
+        self.conv2 = nn.Conv2d(features, 3, 3, padding=1)
+        self.conv3 = nn.Conv2d(features, 3, 3, padding=1)
+        self.conv[depth-3] = nn.Conv2d(features, 3, 3, dilation=(rate,rate), padding=1)
+        self.conv[depth-2] = nn.Conv2d(features, 3, 3, dilation=(rate,rate), padding=1)
+        self.conv[depth-1] = nn.Conv2d(features, 3, 3, dilation=(rate,rate), padding=1)
+
+
+        self.outputs = self.conv[depth-1]
+
+        if self.border_mode == 'valid' :
+            # original keras class
+            self.outputs =  Cropping2D(cropping=((53, 53), (53, 53)))(outputs) image[0:128, 0:128]
+
+            # possible translation to pytorch???  pytorch discussion says cropping can be accomplished with negative numbers
+            self.outputs = nn.functional.pad(self.outputs, (-53, -53, -53, -53) ) 
+
+
+
+        def forward(self, x):
+            """ how the network feeds data forward through the layers
+            
+                Parameters
+                    x (tensor): being passhed through the layer
+            """
+
+            x = self.nn.MaxPool2d((F.relu(self.conv0(x))))
+            x = self.nn.MaxPool2d((F.relu(self.conv1(x))))
+            x = self.nn.MaxPool2d((F.relu(self.conv2(x))))
+            x = self.nn.MaxPool2d((F.relu(self.conv3(x))))
+
+            for d in range(3, (depth+2)//2) :
+                rate = dilation_rates[d]
+             #how to pass dilation to atrous layers?
+            x = self.nn.MaxPool2d((F.relu(self.conv[depth-3](x))
+            x = self.nn.MaxPool2d((F.relu(self.conv[depth-2](x)))
+            x = self.nn.Sigmoid((F.relu(self.conv[depth-1](x)))
+            
+            if shortcut :
+                x = torch.cat(([conv[d-1], conv[depth-d-1]]), dim=1)
+
 
           
     
@@ -210,7 +252,7 @@ def _cli() :
     sys.stderr.write('Creating model: {}\n'.format(filename))
     if os.path.exists(filename) : 
         sys.exit("Error: Model exists: "+ filename)
-    model=fibnet(**opts)
+    model=Fibnet(**opts)
      
     if verbose:
         model.summary()
