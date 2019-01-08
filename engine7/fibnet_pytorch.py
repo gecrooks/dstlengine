@@ -55,10 +55,6 @@ import argparse
 import os
 import sys
 
-# import keras
-# from keras.models import *
-# from keras.layers import *
-# from keras.optimizers import *
 
 import torch
 import torch.nn as nn
@@ -93,42 +89,14 @@ class Fibnet(nn.Module):
         self.dilation_rates.extend(fibonacci[0:depth//2])
         self.dilation_rates.extend(fibonacci[0:(depth+1)//2][::-1])
 
-        self.depth = 0
-        self.features = None
-        self.tilesize = None
-        self.input_features = None
-        self.output_features =None
-        self.border_mode = 'valid'
-        self.shortcut = True
-
-        self.optimizer = None
+        self.optimizer = nn.Adam(param1, param2)
         self.loss = nn.CrossEntropyLoss()
         self.scheduler = None
         self.input_shape= None
         self.outputs = None
 
-        assert self.depth >= 6
-        assert self.depth <= 28
-        assert self.border_mode == 'valid' or border_mode == 'same'
-
-
         conv = [None] * depth
      
-        # TODO find equivalent pytorch function
-        inputs = Input(input_shape)
-
-        
-        if border_mode == 'valid' :
-            tileborder = sum(rates) 
-        else:
-            tileborder = 0
-
-        input_shape=(self.input_features, self.tilesize + 2*tileborder, self.tilesize + 2*tileborder)
-
-        self.input_features = self.features if self.input_features is None else self.input_features
-        self.output_features = self.features if self.output_features is None else self.output_features
-
-       
 
         self.conv0 = nn.Conv2d(features, 1, 1, padding=1)
         self.conv1 = nn.Conv2d(features, 1, 1, padding='same')
@@ -137,16 +105,54 @@ class Fibnet(nn.Module):
         self.conv[depth-3] = nn.Conv2d(features, 3, 3, dilation=(rate,rate), padding=1)
         self.conv[depth-2] = nn.Conv2d(features, 3, 3, dilation=(rate,rate), padding=1)
         self.conv[depth-1] = nn.Conv2d(features, 3, 3, dilation=(rate,rate), padding=1)
-
-
+        
         self.outputs = self.conv[depth-1]
 
-        if self.border_mode == 'valid' :
-            # original keras class
-            self.outputs =  Cropping2D(cropping=((53, 53), (53, 53)))(outputs) image[0:128, 0:128]
+        
 
-            # possible translation to pytorch???  pytorch discussion says cropping can be accomplished with negative numbers
-            self.outputs = nn.functional.pad(self.outputs, (-53, -53, -53, -53) ) 
+        def input_features(self, depth,
+                                 features, 
+                                 tilesize, 
+                                 input_features=None, 
+                                 output_features=None, 
+                                 border_mode = 'valid', 
+                                 shortcut = True):
+            """ function to input features to fibnet from cli
+            """
+
+            self.depth = 0
+            self.features = None
+            self.tilesize = None
+            self.input_features = None
+            self.output_features =None
+            self.border_mode = 'valid'
+            self.shortcut = True
+
+            assert self.depth >= 6
+            assert self.depth <= 28
+            assert self.border_mode == 'valid' or border_mode == 'same'
+
+
+            if border_mode == 'valid' :
+                tileborder = sum(rates) 
+            else:
+                tileborder = 0
+
+            input_shape=(self.input_features, self.tilesize + 2*tileborder, self.tilesize + 2*tileborder)
+
+            self.input_features = self.features if self.input_features is None else self.input_features
+            self.output_features = self.features if self.output_features is None else self.output_features
+
+            # TODO find equivalent pytorch function
+            inputs = Input(input_shape)
+
+            if self.border_mode == 'valid' :
+                # TODO: check how to do this pytorch correctly
+                # original keras class
+                self.outputs =  Cropping2D(cropping=((53, 53), (53, 53)))(outputs) image[0:128, 0:128]
+
+                # possible translation to pytorch???  pytorch discussion says cropping can be accomplished with negative numbers
+                self.outputs = nn.functional.pad(self.outputs, (-53, -53, -53, -53) ) 
 
 
 
@@ -174,7 +180,8 @@ class Fibnet(nn.Module):
 
 
           
-    
+
+
 def _cli() :
     """Commmand line interface for creating a fibnet"""
     
@@ -252,6 +259,9 @@ def _cli() :
     sys.stderr.write('Creating model: {}\n'.format(filename))
     if os.path.exists(filename) : 
         sys.exit("Error: Model exists: "+ filename)
+
+
+    # TODO: how to 
     model=Fibnet(**opts)
      
     if verbose:
